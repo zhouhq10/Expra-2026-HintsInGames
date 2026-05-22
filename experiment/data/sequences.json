@@ -1,0 +1,56 @@
+[
+  {
+    "id": "base_01",
+    "phase": "baseline",
+    "difficulty": 1,
+    "sequence": [2, 4, 6, 8, 10],
+    "answer": 12,
+    "rule": "Add 2 to the previous number.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_02",
+    "phase": "baseline",
+    "difficulty": 2,
+    "sequence": [3, 6, 12, 24, 48],
+    "answer": 96,
+    "rule": "Multiply the previous number by 2.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_01",
+    "phase": "training",
+    "difficulty": 1,
+    "sequence": [5, 10, 15, 20, 25],
+    "answer": 30,
+    "rule": "Add 5 to the previous number.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_02",
+    "phase": "training",
+    "difficulty": 2,
+    "sequence": [1, 2, 4, 8, 16],
+    "answer": 32,
+    "rule": "Multiply the previous number by 2.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_01",
+    "phase": "test",
+    "difficulty": 1,
+    "sequence": [7, 14, 21, 28, 35],
+    "answer": 42,
+    "rule": "Add 7 to the previous number.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_02",
+    "phase": "test",
+    "difficulty": 2,
+    "sequence": [2, 6, 18, 54, 162],
+    "answer": 486,
+    "rule": "Multiply the previous number by 3.",
+    "is_bottleneck": false
+  }
+]

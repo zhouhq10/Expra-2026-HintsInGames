@@ -1,0 +1,326 @@
+/* Dunkles Lab-Tool-Theme. Fullscreen-Layout: jeder Screen füllt das Viewport,
+ * Inhalt wird vertikal + horizontal zentriert. Iteration 1. */
+
+:root {
+  --bg: #1a1a1a;
+  --bg-elevated: #242424;
+  --fg: #e8e8e8;
+  --fg-muted: #a0a0a0;
+  --accent: #5fa8d3;
+  --accent-hover: #7cbce0;
+  --error: #e07b7b;
+  --success: #7bc97b;
+  --border: #3a3a3a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Container = Vollbild, ein Screen = ein Vollbild-Flex-Container.
+ * `[hidden]` versteckt Screens, alle anderen werden zentriert dargestellt. */
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 1.75rem;
+  padding: 3rem 2rem;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+/* Textbreite begrenzen, damit Anweisungen nicht über die ganze Breite laufen. */
+h1, h2, p {
+  margin: 0;
+  max-width: 36rem;
+}
+
+h1 { font-size: 2rem; font-weight: 600; }
+h2 { font-size: 1.5rem; font-weight: 600; }
+
+p.error    { color: var(--error); }
+p.muted    { color: var(--fg-muted); font-size: 0.9rem; }
+p.feedback { min-height: 1.5em; font-weight: 500; }
+p.feedback.is-correct { color: var(--success); }
+p.feedback.is-wrong   { color: var(--error); }
+
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* ---------- Welcome: Condition-Picker (Test-Modus) ------------------ */
+
+.condition-picker {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1.25rem 1rem;
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  text-align: left;
+  width: 100%;
+  max-width: 30rem;
+  margin: 0;
+}
+
+.condition-picker legend {
+  padding: 0 0.4rem;
+  color: var(--fg-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.condition-picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.condition-picker label:hover {
+  color: var(--fg);
+}
+
+.condition-picker input[type="radio"] {
+  accent-color: var(--accent);
+  margin-top: 0.2rem;
+}
+
+.condition-picker strong {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* ---------- Trial-Screen --------------------------------------------- */
+
+/* Trial-Screen ist `position: relative`, damit die Glühbirne oben rechts
+ * absolut positioniert werden kann ohne das Flex-Layout zu stören. */
+#screen-trial { position: relative; }
+
+.lightbulb-btn {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.lightbulb-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---------- Hint-Panel (Side-Drawer von rechts) --------------------- */
+
+.hint-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 92vw);
+  z-index: 100;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  text-align: left;
+
+  /* Slide-in: Standard ist eingeblendet, [hidden] schiebt nach rechts raus.
+   * Wir überschreiben das Default-`display: none` von [hidden] mit
+   * `display: flex` und schieben stattdessen via transform. */
+  transform: translateX(0);
+  transition: transform 220ms ease;
+}
+
+.hint-panel[hidden] {
+  display: flex !important;
+  transform: translateX(100%);
+  pointer-events: none;
+}
+
+.hint-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.hint-panel-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 0 0.4rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.icon-btn:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hint-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  /* etwas Innenabstand gegen den Scroll-Rand */
+  padding-right: 0.25rem;
+}
+
+.hint-messages .hint-bubble {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  color: var(--fg);
+  font-size: 0.95rem;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.hint-messages .hint-bubble.user {
+  border-left-color: var(--fg-muted);
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.hint-followup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.hint-followup input[type="text"] {
+  flex: 1;
+  font-size: 1rem;
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  width: auto;
+}
+
+.hint-followup button {
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+}
+
+.sequence {
+  font-size: clamp(2.25rem, 6vw, 4rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  /* Damit `2 — 4 — 8 — 16 — 32 — ?` auf schmalen Screens umbrechen kann. */
+  max-width: 90vw;
+}
+
+.answer-form {
+  display: flex;
+  justify-content: center;
+}
+
+input[type="text"] {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.85rem 1.25rem;
+  font-size: 1.75rem;
+  font-family: inherit;
+  text-align: center;
+  width: 12rem;
+}
+
+input[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+/* ---------- Buttons -------------------------------------------------- */
+
+button {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #0d2230;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--fg-muted);
+  border-color: var(--border);
+}
+
+button.secondary:hover {
+  color: var(--fg);
+  border-color: var(--fg-muted);
+}
