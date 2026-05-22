@@ -17,8 +17,9 @@
         Your task is to determine the next number in each one.
       </p>
       <p>
-        The experiment has three phases with 20 tasks in total
-        and takes about 15 minutes.
+        The experiment has three phases with 25 tasks in total.
+        Each task has a 2:30 time limit, and you score points for solving
+        correctly and quickly.
       </p>
 
       <fieldset class="condition-picker">
@@ -84,6 +85,13 @@
         </svg>
       </button>
 
+      <!-- Status bar: phase/task counter, countdown timer, running score. -->
+      <div class="trial-status">
+        <span id="trial-counter" class="trial-counter"></span>
+        <span id="trial-timer" class="trial-timer" aria-label="Time remaining">2:30</span>
+        <span id="trial-score" class="trial-score">0 pts</span>
+      </div>
+
       <div id="trial-sequence" class="sequence" aria-label="Number sequence"></div>
 
       <form id="trial-form" class="answer-form" autocomplete="off">
@@ -130,18 +138,15 @@
       </aside>
 
       <p id="trial-feedback" class="feedback" aria-live="polite"></p>
-
-      <button id="trial-skip-btn" class="secondary" hidden>
-        Skip task
-      </button>
     </section>
 
     <!-- End screen: thanks + CSV download -->
     <section id="screen-end" class="screen" hidden>
       <h2>Thank you for participating!</h2>
+      <p id="end-score" class="end-score"></p>
       <p>
-        The experiment is complete. Please download your data below and
-        send it to the experimenter.
+        The experiment is complete. Your data has been saved automatically.
+        You can also download a copy below.
       </p>
       <button id="end-download-btn" class="primary">Download data</button>
       <p class="muted">

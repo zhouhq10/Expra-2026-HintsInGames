@@ -124,6 +124,52 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
  * absolut positioniert werden kann ohne das Flex-Layout zu stören. */
 #screen-trial { position: relative; }
 
+/* Statusleiste oben: Phasen-/Aufgaben-Zähler, Countdown, Punktestand.
+ * Absolut positioniert, damit sie das vertikal zentrierte Layout nicht
+ * verschiebt. `pointer-events: none`, damit die volle Breite NICHT die
+ * Glühbirne (top-right) überdeckt und deren Klicks abfängt. */
+.trial-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 5rem;
+  font-size: 0.95rem;
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+
+.trial-counter { text-align: left; }
+.trial-score   { text-align: right; font-variant-numeric: tabular-nums; }
+
+.trial-timer {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Letzte 30 Sekunden: Timer rot, dezent pulsierend. */
+.trial-timer.is-low {
+  color: var(--error);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  50% { opacity: 0.5; }
+}
+
+.end-score {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .lightbulb-btn {
   position: absolute;
   top: 1.5rem;

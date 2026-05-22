@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import socket
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -52,6 +55,11 @@ log = logging.getLogger("hint-server")
 # .env aus dem experiment/-Verzeichnis laden (egal von wo gestartet).
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
+
+# Ergebnis-CSVs landen serverseitig hier (auf dem Host-Rechner). So bekommt
+# der Versuchsleiter die Daten auch dann, wenn ein Teilnehmer das Experiment
+# über die LAN-IP auf einem anderen Gerät spielt. Verzeichnis ist gitignored.
+RESULTS_DIR = ROOT / "data" / "results"
 
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 DEFAULT_MODEL = os.environ.get("LLM_MODEL", "claude-haiku-4-5").strip()
@@ -87,10 +95,16 @@ ALLOWED_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective")
 
 
 class TrialPayload(BaseModel):
-    """Was der Frontend pro Trial mitschickt."""
+    """Was der Frontend pro Trial mitschickt.
+
+    `sequence` sind die sichtbaren Tokens (Strings, damit führende Nullen wie
+    "019" erhalten bleiben), OHNE die Lücke. `blank_index` gibt an, an welcher
+    Position die gesuchte Zahl ("?") sitzt — Default ist ans Ende.
+    """
 
     id: str
-    sequence: list[int]
+    sequence: list[str]
+    blank_index: int | None = None
     answer: int
     rule: str = ""
 
@@ -119,6 +133,18 @@ class HintRequest(BaseModel):
 class HintResponse(BaseModel):
     hint: str
     model: str
+
+
+class ResultsRequest(BaseModel):
+    """Fertige CSV vom Frontend, die der Server auf dem Host ablegt."""
+
+    participant_id: str = ""
+    condition: str = ""
+    csv: str
+
+
+class ResultsResponse(BaseModel):
+    saved_as: str
 
 
 # ---------- App / Routes --------------------------------------------------
@@ -226,6 +252,35 @@ def post_hint(req: HintRequest) -> HintResponse:
     return HintResponse(hint=hint_text, model=DEFAULT_MODEL)
 
 
+def _sanitize_filename(value: str, fallback: str) -> str:
+    """Nur unkritische Zeichen zulassen — verhindert Path-Traversal."""
+    cleaned = re.sub(r"[^A-Za-z0-9_-]", "_", value or "").strip("_")
+    return cleaned or fallback
+
+
+@app.post("/api/results", response_model=ResultsResponse)
+def post_results(req: ResultsRequest) -> ResultsResponse:
+    """Speichert die übermittelte CSV serverseitig auf dem Host-Rechner."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    safe_id = _sanitize_filename(req.participant_id, "anon")
+    safe_cond = _sanitize_filename(req.condition, "unknown")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    filename = f"experiment_{safe_id}_{safe_cond}_{ts}.csv"
+    path = RESULTS_DIR / filename
+
+    try:
+        path.write_text(req.csv, encoding="utf-8")
+    except OSError as err:
+        log.error("Could not write results file %s: %s", path, err)
+        raise HTTPException(
+            status_code=500, detail="Could not save results on the host."
+        ) from err
+
+    log.info("results saved participant=%s condition=%s file=%s", safe_id, safe_cond, filename)
+    return ResultsResponse(saved_as=filename)
+
+
 # ---------- Static-Files-Serving ------------------------------------------
 # Reihenfolge wichtig: erst spezifische Routen (oben), dann StaticFiles als
 # Catch-all. /api/* muss vor StaticFiles registriert sein.
@@ -247,9 +302,33 @@ def style() -> FileResponse:
 
 # ---------- Entrypoint ----------------------------------------------------
 
+def _local_ip() -> str:
+    """Ermittelt die LAN-IP dieses Rechners (ohne echten Traffic zu senden)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))  # Route bestimmen; es fliessen keine Daten.
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("PORT", "8000"))
-    log.info("Starting server on http://localhost:%d (model: %s)", port, DEFAULT_MODEL)
-    uvicorn.run("server:app", host="127.0.0.1", port=port, reload=False)
+    # Default 0.0.0.0: erlaubt Zugriff von anderen Geräten im selben Netzwerk.
+    # Über HOST=127.0.0.1 lässt sich der Server auf den eigenen Rechner begrenzen.
+    host = os.environ.get("HOST", "0.0.0.0").strip()
+
+    log.info("Starting server (model: %s)", DEFAULT_MODEL)
+    log.info("  Local:   http://localhost:%d", port)
+    if host == "0.0.0.0":
+        log.info("  Network: http://%s:%d  (share this with testers on the same Wi-Fi)", _local_ip(), port)
+        log.warning(
+            "Server is reachable on your local network without authentication — "
+            "only run it on a trusted network. Results CSVs are saved to %s",
+            RESULTS_DIR,
+        )
+    uvicorn.run("server:app", host=host, port=port, reload=False)

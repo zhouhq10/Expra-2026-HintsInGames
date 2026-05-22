@@ -31,6 +31,27 @@
     return groupByPhase(all);
   }
 
+  /**
+   * Liefert die anzuzeigenden Tokens eines Trials inkl. der Lücke "?".
+   * `sequence` enthält die sichtbaren Zahlen (als Strings, ohne die Lücke);
+   * `blank_index` gibt an, an welcher Position die Lücke eingefügt wird.
+   * Fehlt `blank_index`, sitzt die Lücke am Ende ("nächste Zahl").
+   * @returns {string[]}
+   */
+  function trialTokens(trial) {
+    const tokens = (trial.sequence || []).map(String);
+    const idx =
+      Number.isInteger(trial.blank_index) ? trial.blank_index : tokens.length;
+    const clamped = Math.max(0, Math.min(idx, tokens.length));
+    tokens.splice(clamped, 0, '?');
+    return tokens;
+  }
+
+  /** Wie trialTokens, aber als ein String mit gewähltem Trennzeichen. */
+  function trialText(trial, separator) {
+    return trialTokens(trial).join(separator);
+  }
+
   /** Gruppiert nach Phase und sortiert jede Gruppe nach difficulty. */
   function groupByPhase(all) {
     const grouped = { baseline: [], training: [], test: [] };
@@ -50,5 +71,5 @@
     return grouped;
   }
 
-  window.sequencesModule = { loadSequences };
+  window.sequencesModule = { loadSequences, trialTokens, trialText };
 })();

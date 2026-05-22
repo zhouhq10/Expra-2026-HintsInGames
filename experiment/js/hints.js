@@ -184,7 +184,11 @@
           condition,
           trial: {
             id: currentTrial.id,
-            sequence: currentTrial.sequence,
+            sequence: currentTrial.sequence.map(String),
+            blank_index:
+              Number.isInteger(currentTrial.blank_index)
+                ? currentTrial.blank_index
+                : currentTrial.sequence.length,
             answer: currentTrial.answer,
             rule: currentTrial.rule || ''
           },

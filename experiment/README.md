@@ -8,7 +8,10 @@ Web-based prototype for the Expra-2026 project **"Hints in Games"** (TU Darmstad
 - **Backend:** small FastAPI server in `server.py`. Two jobs:
   1. Static-file serving (replaces `python -m http.server`).
   2. `/api/hint` — proxies requests to the Anthropic API. Keeps the API key server-side.
-- **Hints are generated at runtime by Claude.** Each condition (`direct`, `strategy`, `reflective`) gets its own system prompt from `prompts.py`. After the first hint, the participant can ask follow-up questions — the LLM stays strictly in its assigned hint type.
+- **Hints are generated at runtime by Claude.** Each condition (`direct`, `strategy`, `reflective`) gets its own system prompt from `prompts.py`. After the first hint, the participant can ask follow-up questions — the LLM stays strictly in its assigned hint type. The LLM is *told* the correct answer and rule, so it never has to work them out itself.
+- **Each task has a 2:30 time limit** with a visible countdown. When it runs out, the next task is shown automatically.
+- **Scoring:** a correct answer is worth 100 points plus a time bonus (`max(0, 150 − seconds taken)`), so faster answers score higher (max 250 per task). Unsolved tasks score 0.
+- **Results are saved automatically on the host computer** at the end (folder `experiment/data/results/`), even when a friend plays over the local network. A manual download button is also available as a backup.
 
 ## Git / GitHub for beginners
 
@@ -128,53 +131,131 @@ The file `experiment/.env` contains your API key and is therefore listed in `.gi
 
 ---
 
-## Setup
+## Setup (step by step, for first-timers)
+
+You only do steps 1–4 **once** per computer. After that, starting the experiment
+is just step 5. Every command goes into the **terminal** (macOS: open
+`Terminal.app`; Windows: open `Git Bash` or `PowerShell`).
+
+**0. Install Python (once).** Type `python3 --version` (macOS/Linux) or
+`python --version` (Windows). If you see something like `Python 3.11.x`, you're
+fine. If you get an error, install Python 3 from
+[python.org/downloads](https://www.python.org/downloads/) and tick
+**"Add Python to PATH"** during the Windows installer.
+
+**1. Go into the experiment folder.** From the project folder you cloned:
 
 ```bash
 cd experiment
+```
 
-# 1. Create a virtual Python environment
-python -m venv .venv
-source .venv/bin/activate          # macOS/Linux
-# .venv\Scripts\activate            # Windows
+**2. Create a virtual Python environment (once).** This keeps the project's
+packages separate from the rest of your system:
 
-# 2. Install dependencies
+```bash
+python3 -m venv .venv         # macOS/Linux   (use "python" on Windows)
+source .venv/bin/activate     # macOS/Linux
+# .venv\Scripts\activate      # Windows (run this line instead)
+```
+
+After this your terminal line starts with `(.venv)`. That means it worked.
+You need to run the `activate` line again every time you open a new terminal.
+
+**3. Install the dependencies (once):**
+
+```bash
 pip install -r requirements.txt
+```
 
-# 3. Configure the API key
-cp .env.example .env
-# edit .env and paste your key after ANTHROPIC_API_KEY=
+**4. Add your Claude API key (once):**
 
-# 4. Start the server
+```bash
+cp .env.example .env          # macOS/Linux
+# copy .env.example .env      # Windows
+```
+
+Then open the new `.env` file in a text editor and paste your key after
+`ANTHROPIC_API_KEY=`. You get a key at
+[console.anthropic.com](https://console.anthropic.com). Without a valid key the
+page still loads, but the hint lightbulb won't return any hints.
+**Never share or commit this file** — it's gitignored on purpose.
+
+**5. Start the experiment:**
+
+```bash
 python server.py
 ```
 
-Server runs on [http://localhost:8000](http://localhost:8000).
+Leave this terminal window open — the server runs as long as it stays open.
+Press `Ctrl+C` to stop it.
+
+## Running & testing it
+
+When the server starts, it prints two web addresses:
+
+```
+  Local:   http://localhost:8000
+  Network: http://192.168.x.x:8000   (share this with testers on the same Wi-Fi)
+```
+
+**To test it yourself:** open **http://localhost:8000** in your browser (Chrome,
+Firefox, Safari, …) on the same computer that runs the server.
+
+**To let a friend test it:** make sure their device (laptop/phone) is on the
+**same Wi-Fi** as your computer, then send them the **Network** address
+(`http://192.168.x.x:8000`). They open it in their browser and play the
+experiment. **The results CSV is saved on *your* computer** (in
+`experiment/data/results/`), not on theirs — so you always get the data back.
+
+> The first time you start the server, macOS/Windows may pop up a firewall
+> dialog asking whether to allow incoming connections. Click **Allow**, otherwise
+> friends on the Wi-Fi can't reach the page. Only run this on a network you
+> trust — there is no password protection.
+
+**Fast test mode:** add `?timelimit=40` to the URL to shorten the per-task limit
+from 2:30 to 40 seconds, so you can click through a full run quickly to check
+that everything works. Example:
+`http://localhost:8000/?timelimit=40&condition=direct`
+
+If you ever change a file and the browser still shows the old version, do a
+**hard reload**: `Cmd+Shift+R` (macOS) or `Ctrl+Shift+R` (Windows).
 
 ## URL parameters
 
 - `?condition=direct|strategy|reflective|control` — selects the hint condition. If missing, a random condition is assigned (`condition_assigned=random` in the log).
 - `?id=<some-string>` — overrides the randomly generated participant ID. Useful when the experimenter wants to pre-assign IDs.
+- `?timelimit=<seconds>` — overrides the 2:30 (150 s) per-task limit. Mainly for fast testing, e.g. `?timelimit=40`.
 
-Example: `http://localhost:8000/?condition=strategy&id=p_001`
+You can combine them: `http://localhost:8000/?condition=strategy&id=p_001&timelimit=40`
 
 ## Phase flow
 
-1. **Baseline** (5 trials, no hints) — measures baseline ability.
-2. **Training** (10 trials, hints for the 3 hint conditions) — the lightbulb appears only here and only when not in `control`.
-3. **Test** (5 trials, no hints) — measures learning transfer.
+Three phases, **25 tasks** total (the lightbulb appears only in **training**, and only when the condition is not `control`):
 
-(Currently `data/sequences.json` only has 6 dummy sequences — real sequences will be added before the pilot.)
+1. **Baseline** (8 tasks, no hints) — measures ability before any help.
+2. **Training** (9 tasks, hints available for the 3 hint conditions).
+3. **Test** (8 tasks, no hints) — the **same 8 sequences as baseline**, to measure how much improved.
 
-## CSV logging
+Every task has a 2:30 countdown; running out of time moves on to the next task and scores 0 for that task.
 
-At the end of the experiment, a CSV is downloaded via the browser:
+## Where the data goes
+
+When a participant finishes, the CSV is **automatically saved on the computer
+running the server** (the host), in:
 
 ```
-experiment_<participant_id>_<condition>_<timestamp>.csv
+experiment/data/results/experiment_<participant_id>_<condition>_<timestamp>.csv
 ```
 
-Columns (one row per trial):
+This works even when the participant played over the local network from another
+device. The end screen also has a **"Download data"** button that saves a copy in
+the participant's own browser — that's just a backup. (`experiment/data/results/`
+is gitignored, so participant data never lands in the repo.)
+
+Each CSV has one row per task, followed by a short `SUMMARY` block (totals and
+averages, including average solving time per task overall and per phase).
+
+Columns (one row per task):
 
 | Column                    | Description                                          |
 | ------------------------- | ---------------------------------------------------- |
@@ -183,35 +264,41 @@ Columns (one row per trial):
 | `condition_assigned`      | `url`, `random`, or `manual`                         |
 | `phase`                   | `baseline` / `training` / `test`                     |
 | `trial_id`                | e.g. `train_03`                                      |
-| `sequence`                | shown sequence as a string, e.g. `2,4,8,16,32`       |
+| `sequence`                | shown sequence incl. the `?`, e.g. `2,4,8,16,32,?`   |
 | `correct_answer`          | expected solution                                    |
-| `participant_answer`      | final input (empty on skip)                          |
+| `participant_answer`      | final / last input (empty if never answered)         |
 | `is_correct`              | `true`/`false`                                       |
-| `was_skipped`             | `true` if trial was skipped after 5 wrong attempts   |
-| `is_bottleneck`           | `true` if this trial is the bottleneck task          |
-| `solving_time_ms`         | from sequence display to final answer                |
+| `was_skipped`             | always `false` (skipping was removed)                |
+| `timed_out`               | `true` if the 2:30 limit ran out before a correct answer |
+| `is_bottleneck`           | `true` if this task is the bottleneck task           |
+| `solving_time_ms`         | from task display to final answer (capped at the time limit) |
 | `num_attempts`            | number of submit clicks                              |
 | `num_wrong_attempts`      | number of wrong submits                              |
+| `points_completion`       | 100 if solved, else 0                                |
+| `points_time_bonus`       | `max(0, 150 − seconds taken)` if solved, else 0      |
+| `points_total`            | `points_completion + points_time_bonus`              |
 | `hint_used`               | `true` if at least one hint was requested            |
 | `hint_trigger`            | `manual` / `auto` / `none`                           |
 | `time_to_first_hint_ms`   | time to first hint, or empty                         |
-| `hint_count`              | number of hint requests in this trial (incl. follow-ups) |
-| `hint_texts`              | all hints in this trial, separated by `\|\|`           |
+| `hint_count`              | number of hint requests in this task (incl. follow-ups) |
+| `hint_texts`              | all hints in this task, separated by `\|\|`            |
 | `llm_model`               | which Claude model generated the hints               |
 | `timestamp`               | ISO string                                           |
 
 ## Architecture
 
 ```
-Browser  ─POST /api/hint─►  server.py (FastAPI)  ─HTTPS─►  api.anthropic.com
-                              │
-                              .env  (ANTHROPIC_API_KEY — never visible in browser)
+Browser  ─POST /api/hint────►  server.py (FastAPI)  ─HTTPS─►  api.anthropic.com
+         ─POST /api/results─►       │
+                                    ├─ .env                  (ANTHROPIC_API_KEY — never visible in browser)
+                                    └─ data/results/*.csv    (results saved on the host)
 ```
 
 Key points:
 
 - **API key stays server-side** in `.env`. The browser never sees it. `.env` is gitignored.
-- **Server is stateless.** Conversation state (multi-turn history per trial) lives in the frontend and is sent along with every hint request.
+- **Server is stateless** for hints. Conversation state (multi-turn history per trial) lives in the frontend and is sent along with every hint request.
+- **Results are written by the server** (`POST /api/results`) to `data/results/` so the data ends up on the host even when a participant plays over the local network.
 - **System prompts** in `prompts.py` enforce that the LLM stays strictly in its assigned hint type — even when the participant asks "just give me the answer". This is methodologically critical for clean comparison data between conditions.
 
 ## Model choice
@@ -225,4 +312,5 @@ Default: `claude-haiku-4-5` (cheapest option, good for high pilot volumes). Over
 
 - Auto-trigger (hint after 60 s of inactivity or 2 wrong answers) not yet implemented (currently manual only).
 - Concrete bottleneck sequence not yet designed (schema is ready via the `is_bottleneck` flag).
-- Real sequences + final hint wording will be added before the internal pilot (May 17).
+- The network mode has **no authentication** — only run it on a trusted Wi-Fi.
+- Hint wording in `prompts.py` may still be tuned before the pilot.

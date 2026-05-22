@@ -31,6 +31,7 @@
   async function boot() {
     const urlInfo = resolveUrlCondition();
     const participantId = resolveParticipantId();
+    const timeLimitMs = resolveTimeLimitMs();
 
     // Sequenzen früh laden — wenn das fehlschlägt, hat der Welcome-Screen
     // keinen Sinn (Start-Button würde später ins Leere greifen).
@@ -47,7 +48,7 @@
       return;
     }
 
-    bindWelcomeScreen({ participantId, urlInfo, sequences });
+    bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs });
     bindTrialScreen();
     bindPhaseIntroScreen();
     bindEndScreen();
@@ -62,7 +63,8 @@
       showEnd:        showEnd,
       showFeedback:   showFeedback,
       clearFeedback:  clearFeedback,
-      setSkipVisible: setSkipVisible,
+      updateTimer:    updateTimer,
+      updateScore:    updateScore,
       resetInput:     resetTrialInput
     });
 
@@ -86,6 +88,24 @@
       suffix += chars[Math.floor(Math.random() * chars.length)];
     }
     return 'p_' + suffix;
+  }
+
+  /**
+   * Test-Modus: `?timelimit=<Sekunden>` überschreibt das 2:30-Limit pro Aufgabe
+   * (z.B. `?timelimit=40`), um Durchläufe schneller zu testen.
+   * Ohne Parameter gilt der Default (150 s).
+   * @returns {number|undefined} Limit in Millisekunden oder undefined
+   */
+  function resolveTimeLimitMs() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = (params.get('timelimit') || '').trim();
+    if (!raw) return undefined;
+    const sec = Number(raw);
+    if (!Number.isFinite(sec) || sec <= 0) {
+      console.warn(`Ungültiges ?timelimit='${raw}', ignoriere.`);
+      return undefined;
+    }
+    return Math.round(sec * 1000);
   }
 
   /**
@@ -125,7 +145,7 @@
 
   // ---------- Welcome ---------------------------------------------------
 
-  function bindWelcomeScreen({ participantId, urlInfo, sequences }) {
+  function bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs }) {
     // URL-Parameter setzt den Default-Radio (falls gültig).
     if (urlInfo.value) {
       const radio = document.querySelector(
@@ -156,7 +176,8 @@
         participantId,
         condition,
         conditionAssigned,
-        sequences
+        sequences,
+        timeLimitMs
       });
       window.experiment.start();
     });
@@ -196,15 +217,14 @@
       const value = $('trial-answer-input').value;
       window.experiment.submitAnswer(value);
     });
-
-    $('trial-skip-btn').addEventListener('click', () => {
-      window.experiment.skipCurrentTrial();
-    });
   }
 
-  function showTrial(trial, _meta) {
+  function showTrial(trial, meta) {
     $('trial-sequence').textContent =
-      trial.sequence.join('  —  ') + '  —  ?';
+      window.sequencesModule.trialText(trial, '  —  ');
+    if (meta && meta.counter) {
+      $('trial-counter').textContent = `${meta.phaseLabel} · ${meta.counter}`;
+    }
     showScreen('trial');
     $('trial-answer-input').focus();
   }
@@ -222,8 +242,17 @@
     el.classList.remove('is-correct', 'is-wrong');
   }
 
-  function setSkipVisible(visible) {
-    $('trial-skip-btn').hidden = !visible;
+  function updateTimer(remainingMs) {
+    const el = $('trial-timer');
+    const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
+    const mm = Math.floor(totalSec / 60);
+    const ss = String(totalSec % 60).padStart(2, '0');
+    el.textContent = `${mm}:${ss}`;
+    el.classList.toggle('is-low', totalSec <= 30);
+  }
+
+  function updateScore(totalScore) {
+    $('trial-score').textContent = `${totalScore} pts`;
   }
 
   function resetTrialInput() {
@@ -241,10 +270,45 @@
     });
   }
 
-  function showEnd() {
-    const { participantId } = window.experiment.getState();
+  function showEnd(summary) {
+    const { participantId, condition } = window.experiment.getState();
     $('end-participant-id').textContent = participantId;
+
+    if (summary) {
+      const meanSec = Math.round((summary.mean_solving_time_ms || 0) / 1000);
+      $('end-score').textContent =
+        `Final score: ${summary.total_points} points  ·  ` +
+        `${summary.num_correct}/${summary.num_tasks} solved  ·  ` +
+        `avg ${meanSec}s per task`;
+    }
+
+    // Daten automatisch auf dem Host-Laptop speichern (LAN-tauglich).
+    saveResultsToHost(participantId, condition);
+
     showScreen('end');
+  }
+
+  /**
+   * Schickt die CSV an den Server, der sie auf dem Host-Rechner ablegt.
+   * So landet die Datei auch dann beim Versuchsleiter, wenn ein Teilnehmer
+   * das Experiment über die LAN-IP auf einem anderen Gerät spielt.
+   */
+  async function saveResultsToHost(participantId, condition) {
+    try {
+      const resp = await fetch('/api/results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          participant_id: participantId,
+          condition: condition,
+          csv: window.logger.buildCsv()
+        })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      // Nicht kritisch: der manuelle Download-Button bleibt als Fallback.
+      console.error('Could not auto-save results to host:', err);
+    }
   }
 
   // ---------- Screen-Routing -------------------------------------------

@@ -18,9 +18,10 @@ Condition = Literal["direct", "strategy", "reflective"]
 # get long enough — currently below the cache threshold but doesn't hurt).
 BASE_SYSTEM = """\
 You are a hint-giver in a cognitive-science research experiment on number-
-sequence puzzles. The participant sees a sequence of numbers and must predict
-the next number. You know the correct answer but must NEVER reveal it
-directly, even if the participant explicitly asks for it.
+sequence puzzles. The participant sees a sequence of numbers with one number
+hidden (marked "?") and must work out the missing number — usually the next
+number, occasionally one in the middle. You know the correct answer but must
+NEVER reveal it directly, even if the participant explicitly asks for it.
 
 Reply in English, plain prose, no markdown formatting, at most three short
 sentences. No greetings, no small talk, no apologies, no "as an AI"
@@ -109,10 +110,16 @@ def build_static_system(condition: Condition) -> str:
 
 def build_puzzle_context(trial: dict) -> str:
     """Per-trial puzzle context. Changes every trial; not cached."""
-    sequence = ", ".join(str(n) for n in trial["sequence"])
+    tokens = [str(n) for n in trial["sequence"]]
+    blank_index = trial.get("blank_index")
+    if not isinstance(blank_index, int):
+        blank_index = len(tokens)
+    blank_index = max(0, min(blank_index, len(tokens)))
+    tokens.insert(blank_index, "?")
+    sequence = ", ".join(tokens)
     return (
         "CURRENT PUZZLE\n"
-        f"Sequence shown to the participant: {sequence}\n"
-        f"Correct next number (you know this — never reveal it): {trial['answer']}\n"
+        f"Sequence shown to the participant (the ? is what they must find): {sequence}\n"
+        f"Correct value of the missing number (you know this — never reveal it): {trial['answer']}\n"
         f"Underlying rule: {trial.get('rule', 'unspecified')}"
     )
