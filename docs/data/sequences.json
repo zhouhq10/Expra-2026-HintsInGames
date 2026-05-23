@@ -1,0 +1,231 @@
+[
+  {
+    "id": "base_01",
+    "phase": "baseline",
+    "difficulty": 1,
+    "sequence": ["716", "325", "642", "571", "154", "237"],
+    "answer": 463,
+    "rule": "In each digit position, the numbers 1 to 7 each appear exactly once.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_02",
+    "phase": "baseline",
+    "difficulty": 2,
+    "sequence": ["0", "5", "16", "39", "80", "145"],
+    "answer": 240,
+    "rule": "Constant third differences (finite-difference method).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_03",
+    "phase": "baseline",
+    "difficulty": 3,
+    "sequence": ["1", "2", "4", "7", "13", "24"],
+    "answer": 44,
+    "rule": "Each term is the sum of the previous three terms (tribonacci).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_04",
+    "phase": "baseline",
+    "difficulty": 4,
+    "sequence": ["7", "16", "34", "70"],
+    "answer": 142,
+    "rule": "Each term equals the previous term times 2, plus 2.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_05",
+    "phase": "baseline",
+    "difficulty": 5,
+    "sequence": ["11", "22", "66", "264"],
+    "blank_index": 1,
+    "answer": 11,
+    "rule": "Each term equals the previous term times an increasing factor (x1, x2, x3, x4).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_06",
+    "phase": "baseline",
+    "difficulty": 6,
+    "sequence": ["7", "14", "19", "29", "40"],
+    "answer": 44,
+    "rule": "Each term equals the previous term plus the digit sum of the previous term.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_07",
+    "phase": "baseline",
+    "difficulty": 7,
+    "sequence": ["7", "49", "97", "130", "10"],
+    "answer": 1,
+    "rule": "Each term is the sum of the squares of the digits of the previous term.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "base_08",
+    "phase": "baseline",
+    "difficulty": 8,
+    "sequence": ["12", "33", "66", "132", "363"],
+    "answer": 726,
+    "rule": "Each term equals the previous term plus the previous term with its digits reversed.",
+    "is_bottleneck": false
+  },
+
+  {
+    "id": "train_01",
+    "phase": "training",
+    "difficulty": 1,
+    "sequence": ["2", "6", "5", "15"],
+    "answer": 14,
+    "rule": "Alternating operations: x3, then -1, then x3, then -1.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_02",
+    "phase": "training",
+    "difficulty": 2,
+    "sequence": ["13", "24", "45", "86", "167"],
+    "answer": 328,
+    "rule": "Each digit follows its own pattern: the tens digit multiplies by 2, the ones digit increases by 1.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_03",
+    "phase": "training",
+    "difficulty": 3,
+    "sequence": ["3", "5", "8", "13", "20"],
+    "answer": 31,
+    "rule": "The differences between consecutive numbers are the prime numbers (2, 3, 5, 7, 11, ...).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_04",
+    "phase": "training",
+    "difficulty": 4,
+    "sequence": ["174", "459", "734", "019", "394"],
+    "answer": 679,
+    "rule": "Each digit advances by its own fixed step modulo 10 (first digit +3, second -2, third +5).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_05",
+    "phase": "training",
+    "difficulty": 5,
+    "sequence": ["1", "4", "10", "20", "35"],
+    "answer": 56,
+    "rule": "Tetrahedral numbers; the differences are the triangular numbers 3, 6, 10, 15.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_06",
+    "phase": "training",
+    "difficulty": 6,
+    "sequence": ["9", "16", "29", "53", "93"],
+    "answer": 154,
+    "rule": "Constant third differences (finite-difference method).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_07",
+    "phase": "training",
+    "difficulty": 7,
+    "sequence": ["11", "13", "17", "25", "32", "37"],
+    "answer": 47,
+    "rule": "Each term equals the previous term plus the digit sum of the previous term.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_08",
+    "phase": "training",
+    "difficulty": 8,
+    "sequence": ["2", "3", "7", "16", "32", "57"],
+    "answer": 93,
+    "rule": "The first differences are the perfect squares 1, 4, 9, 16, 25.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "train_09",
+    "phase": "training",
+    "difficulty": 9,
+    "sequence": ["1", "3", "8", "19", "42", "89"],
+    "answer": 184,
+    "rule": "Each term equals the previous term times 2, plus its position number.",
+    "is_bottleneck": false
+  },
+
+  {
+    "id": "test_01",
+    "phase": "test",
+    "difficulty": 1,
+    "sequence": ["716", "325", "642", "571", "154", "237"],
+    "answer": 463,
+    "rule": "In each digit position, the numbers 1 to 7 each appear exactly once.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_02",
+    "phase": "test",
+    "difficulty": 2,
+    "sequence": ["0", "5", "16", "39", "80", "145"],
+    "answer": 240,
+    "rule": "Constant third differences (finite-difference method).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_03",
+    "phase": "test",
+    "difficulty": 3,
+    "sequence": ["1", "2", "4", "7", "13", "24"],
+    "answer": 44,
+    "rule": "Each term is the sum of the previous three terms (tribonacci).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_04",
+    "phase": "test",
+    "difficulty": 4,
+    "sequence": ["7", "16", "34", "70"],
+    "answer": 142,
+    "rule": "Each term equals the previous term times 2, plus 2.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_05",
+    "phase": "test",
+    "difficulty": 5,
+    "sequence": ["11", "22", "66", "264"],
+    "blank_index": 1,
+    "answer": 11,
+    "rule": "Each term equals the previous term times an increasing factor (x1, x2, x3, x4).",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_06",
+    "phase": "test",
+    "difficulty": 6,
+    "sequence": ["7", "14", "19", "29", "40"],
+    "answer": 44,
+    "rule": "Each term equals the previous term plus the digit sum of the previous term.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_07",
+    "phase": "test",
+    "difficulty": 7,
+    "sequence": ["7", "49", "97", "130", "10"],
+    "answer": 1,
+    "rule": "Each term is the sum of the squares of the digits of the previous term.",
+    "is_bottleneck": false
+  },
+  {
+    "id": "test_08",
+    "phase": "test",
+    "difficulty": 8,
+    "sequence": ["12", "33", "66", "132", "363"],
+    "answer": 726,
+    "rule": "Each term equals the previous term plus the previous term with its digits reversed.",
+    "is_bottleneck": false
+  }
+]
