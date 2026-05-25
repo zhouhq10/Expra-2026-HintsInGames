@@ -225,6 +225,9 @@
     if (meta && meta.counter) {
       $('trial-counter').textContent = `${meta.phaseLabel} · ${meta.counter}`;
     }
+    // Scratchpad für jede Aufgabe leeren — verhindert Rückgriff auf
+    // Notizen/Patterns vergangener Aufgaben.
+    $('trial-notepad').value = '';
     showScreen('trial');
     $('trial-answer-input').focus();
   }

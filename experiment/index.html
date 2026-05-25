@@ -95,6 +95,9 @@
       <div id="trial-sequence" class="sequence" aria-label="Number sequence"></div>
 
       <form id="trial-form" class="answer-form" autocomplete="off">
+        <label for="trial-answer-input" class="answer-label">
+          Your answer
+        </label>
         <input
           id="trial-answer-input"
           type="text"
@@ -138,6 +141,23 @@
       </aside>
 
       <p id="trial-feedback" class="feedback" aria-live="polite"></p>
+
+      <!-- Scratchpad: optional notes for the current task. Cleared on every
+           new task so participants can't reuse notes from previous tasks. -->
+      <div class="notepad">
+        <label for="trial-notepad" class="notepad-label">
+          Scratchpad (optional)
+        </label>
+        <textarea
+          id="trial-notepad"
+          class="notepad-area"
+          rows="4"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="Use this space for working things out…"
+          aria-label="Scratchpad for your own notes"
+        ></textarea>
+      </div>
     </section>
 
     <!-- End screen: thanks + CSV download -->
