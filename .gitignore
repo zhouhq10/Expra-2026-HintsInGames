@@ -209,10 +209,7 @@ __marimo__/
 private/
 
 # Participant result CSVs (saved server-side on the host) — never commit data.
-experiment/data/results/
+docs/data/results/
 
 # macOS folder metadata — junk, never commit.
 .DS_Store
-
-# Misplaced design folder (Otis) — does not belong in this repo.
-experiment/data/Plan_V1/

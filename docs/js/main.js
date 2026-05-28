@@ -65,6 +65,7 @@
       clearFeedback:  clearFeedback,
       updateTimer:    updateTimer,
       updateScore:    updateScore,
+      setSkipVisible: setSkipVisible,
       resetInput:     resetTrialInput
     });
 
@@ -172,12 +173,15 @@
         errorEl:       $('hint-error')
       });
 
+      const testMode = $('welcome-test-mode').checked;
+
       window.experiment.init({
         participantId,
         condition,
         conditionAssigned,
         sequences,
-        timeLimitMs
+        timeLimitMs,
+        testMode
       });
       window.experiment.start();
     });
@@ -217,6 +221,11 @@
       const value = $('trial-answer-input').value;
       window.experiment.submitAnswer(value);
     });
+
+    // Skip-Button: nur sichtbar, wenn Test-Modus auf der Startseite an war.
+    $('trial-skip-btn').addEventListener('click', () => {
+      window.experiment.skipCurrentTrial();
+    });
   }
 
   function showTrial(trial, meta) {
@@ -225,6 +234,9 @@
     if (meta && meta.counter) {
       $('trial-counter').textContent = `${meta.phaseLabel} · ${meta.counter}`;
     }
+    // Scratchpad für jede Aufgabe leeren — verhindert Rückgriff auf
+    // Notizen/Patterns vergangener Aufgaben.
+    $('trial-notepad').value = '';
     showScreen('trial');
     $('trial-answer-input').focus();
   }
@@ -253,6 +265,10 @@
 
   function updateScore(totalScore) {
     $('trial-score').textContent = `${totalScore} pts`;
+  }
+
+  function setSkipVisible(visible) {
+    $('trial-skip-btn').hidden = !visible;
   }
 
   function resetTrialInput() {

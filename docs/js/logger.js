@@ -26,6 +26,7 @@
     'is_correct',
     'was_skipped',
     'timed_out',
+    'test_mode',
     'is_bottleneck',
     'solving_time_ms',
     'num_attempts',

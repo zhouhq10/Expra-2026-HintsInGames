@@ -118,6 +118,29 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   color: var(--fg);
 }
 
+/* Test-Modus-Checkbox auf der Startseite (Skip-Button im Trial freischalten). */
+.test-mode-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 30rem;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.test-mode-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin-top: 0.2rem;
+}
+
+.test-mode-toggle strong {
+  font-weight: 600;
+  color: var(--fg);
+}
+
 /* ---------- Trial-Screen --------------------------------------------- */
 
 /* Trial-Screen ist `position: relative`, damit die Glühbirne oben rechts
@@ -313,7 +336,60 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 
 .answer-form {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.answer-label {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Antwortfeld hervorheben, damit es klar vom Scratchpad unten zu
+ * unterscheiden ist (dauerhaft farbiger Rahmen, nicht erst bei Fokus). */
+.answer-form input[type="text"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* ---------- Scratchpad (per-task notes) ----------------------------- */
+
+.notepad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 32rem;
+  /* deutlich nach unten abgesetzt, klar getrennt vom Antwortfeld */
+  margin-top: 3.5rem;
+}
+
+.notepad-label {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+}
+
+.notepad-area {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.notepad-area:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
 }
 
 input[type="text"] {

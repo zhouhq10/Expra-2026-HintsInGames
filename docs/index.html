@@ -46,6 +46,14 @@
         </label>
       </fieldset>
 
+      <label class="test-mode-toggle">
+        <input type="checkbox" id="welcome-test-mode" />
+        <span>
+          <strong>Test mode</strong> — show a skip button on every task
+          (for development; runs are flagged in the CSV)
+        </span>
+      </label>
+
       <button id="welcome-start-btn" class="primary">Start experiment</button>
     </section>
 
@@ -95,6 +103,9 @@
       <div id="trial-sequence" class="sequence" aria-label="Number sequence"></div>
 
       <form id="trial-form" class="answer-form" autocomplete="off">
+        <label for="trial-answer-input" class="answer-label">
+          Your answer
+        </label>
         <input
           id="trial-answer-input"
           type="text"
@@ -138,6 +149,28 @@
       </aside>
 
       <p id="trial-feedback" class="feedback" aria-live="polite"></p>
+
+      <!-- Skip button: only visible when "Test mode" was enabled on the
+           welcome screen. Used by the experimenter to click through tasks
+           quickly while developing/testing — flagged in the CSV. -->
+      <button id="trial-skip-btn" class="secondary" hidden>Skip task</button>
+
+      <!-- Scratchpad: optional notes for the current task. Cleared on every
+           new task so participants can't reuse notes from previous tasks. -->
+      <div class="notepad">
+        <label for="trial-notepad" class="notepad-label">
+          Scratchpad (optional)
+        </label>
+        <textarea
+          id="trial-notepad"
+          class="notepad-area"
+          rows="4"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="Use this space for working things out…"
+          aria-label="Scratchpad for your own notes"
+        ></textarea>
+      </div>
     </section>
 
     <!-- End screen: thanks + CSV download -->

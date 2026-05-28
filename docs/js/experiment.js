@@ -62,6 +62,7 @@
     currentTrialIdx: 0,
     currentTrialState: null,
     timeLimitMs: DEFAULT_TIME_LIMIT_MS, // pro Aufgabe; per ?timelimit= überschreibbar
+    testMode: false,         // Test-Modus: Skip-Button im Trial-Screen einblenden
     totalScore: 0,           // kumulative Punkte über alle Trials
     log: []                  // referenziert die Records des Loggers (informativ)
   };
@@ -75,13 +76,14 @@
     clearFeedback: null,  // () => void
     updateTimer: null,    // (remainingMs: number) => void
     updateScore: null,    // (totalScore: number) => void
+    setSkipVisible: null, // (visible: boolean) => void  — Skip-Button im Test-Modus
     resetInput: null      // () => void
   };
 
   // ---------- Public API -------------------------------------------------
 
   /** Initialisiert den State nach erfolgreichem Welcome-Submit. */
-  function init({ participantId, condition, conditionAssigned, sequences, timeLimitMs }) {
+  function init({ participantId, condition, conditionAssigned, sequences, timeLimitMs, testMode }) {
     experimentState.participantId = participantId;
     experimentState.condition = condition;
     experimentState.conditionAssigned = conditionAssigned;
@@ -93,6 +95,7 @@
       Number.isFinite(timeLimitMs) && timeLimitMs > 0
         ? timeLimitMs
         : DEFAULT_TIME_LIMIT_MS;
+    experimentState.testMode = !!testMode;
     experimentState.totalScore = 0;
   }
 
@@ -154,6 +157,25 @@
     trialState.lastAnswer = String(parsed);
     callbacks.showFeedback('wrong', "That's not correct — try again.");
     callbacks.resetInput();
+  }
+
+  /**
+   * Manueller Skip — nur im Test-Modus über den Skip-Button erreichbar.
+   * Wird wie ein nicht-gelöster Trial gewertet (0 Punkte, was_skipped=true).
+   */
+  function skipCurrentTrial() {
+    const trialState = experimentState.currentTrialState;
+    if (!trialState) return;
+
+    stopTimer();
+    finalizeTrial({
+      participantAnswer: trialState.lastAnswer || '',
+      isCorrect: false,
+      wasSkipped: true,
+      timedOut: false
+    });
+    callbacks.clearFeedback();
+    advanceTrial();
   }
 
   /** Wird gerufen, wenn das Zeitlimit der aktuellen Aufgabe abläuft. */
@@ -219,6 +241,8 @@
 
     callbacks.clearFeedback();
     callbacks.resetInput();
+    // Skip-Button nur im Test-Modus zeigen.
+    if (callbacks.setSkipVisible) callbacks.setSkipVisible(experimentState.testMode);
 
     // hints.js verwaltet seinen eigenen Per-Trial-State (used / trigger / time).
     if (window.hints) {
@@ -297,6 +321,7 @@
       is_correct: isCorrect,
       was_skipped: wasSkipped,
       timed_out: !!timedOut,
+      test_mode: experimentState.testMode,
       is_bottleneck: !!trial.is_bottleneck,
       solving_time_ms: solvingTimeMs,
       num_attempts: trialState.numAttempts,
@@ -371,6 +396,7 @@
     start,
     continueFromPhaseIntro,
     submitAnswer,
+    skipCurrentTrial,
     getState
   };
 })();

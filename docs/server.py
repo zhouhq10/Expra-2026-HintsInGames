@@ -2,13 +2,13 @@
 
 Zwei Aufgaben in einem Server:
   1. Static-Files-Serving (ersetzt `python -m http.server`)
-  2. POST /api/hint — proxiert Anfragen an die Anthropic-API,
+  2. POST /api/hint — proxiert Anfragen an die OpenAI-API (GPT),
      hält den API-Key serverseitig in `.env`.
 
 Start (lokal):
     python -m venv .venv && source .venv/bin/activate
     pip install -r requirements.txt
-    cp .env.example .env  # dann ANTHROPIC_API_KEY in .env eintragen
+    cp .env.example .env  # dann OPENAI_API_KEY in .env eintragen
     python server.py
     # Browser: http://localhost:8000
 
@@ -17,7 +17,7 @@ Architektur:
   - Konversations-State (Multi-Turn-History) liegt im Frontend; der Server
     ist stateless und bekommt die History bei jedem Request mitgeschickt.
   - Bei jeder Hint-Anfrage baut der Server den System-Prompt aus
-    `prompts.py` zusammen, hängt die User-Message an, ruft Claude auf,
+    `prompts.py` zusammen, hängt die User-Message an, ruft GPT auf,
     gibt den Hint-Text zurück.
 """
 
@@ -33,7 +33,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-import anthropic
+import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -61,31 +62,40 @@ load_dotenv(ROOT / ".env")
 # über die LAN-IP auf einem anderen Gerät spielt. Verzeichnis ist gitignored.
 RESULTS_DIR = ROOT / "data" / "results"
 
-API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-DEFAULT_MODEL = os.environ.get("LLM_MODEL", "claude-haiku-4-5").strip()
+API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
 
-if not API_KEY or API_KEY.startswith("sk-ant-PASTE"):
+
+def _key_looks_unset(value: str) -> bool:
+    """True wenn der Key fehlt oder noch der Platzhalter aus .env.example ist."""
+    if not value:
+        return True
+    placeholders = ("sk-PASTE", "sk-...", "your-key-here", "PASTE")
+    return any(value.startswith(p) for p in placeholders)
+
+
+if _key_looks_unset(API_KEY):
     log.warning(
-        "ANTHROPIC_API_KEY does not appear to be set. /api/hint will fail "
-        "until you put a real key in `experiment/.env`."
+        "OPENAI_API_KEY does not appear to be set. /api/hint will fail "
+        "until you put a real key in `docs/.env`."
     )
 
-# anthropic-Client — wirft erst beim ersten Call, falls Key invalid.
+# OpenAI-Client — wirft erst beim ersten Call, falls Key invalid.
 # Wir lassen ihn auch ohne gültigen Key initialisieren, damit Static Files
 # trotzdem ausgeliefert werden können (für Frontend-Entwicklung ohne API).
-_client: anthropic.Anthropic | None = None
+_client: OpenAI | None = None
 
 
-def get_client() -> anthropic.Anthropic:
+def get_client() -> OpenAI:
     """Lazy init des SDK-Clients — erlaubt Server-Start ohne Key."""
     global _client
     if _client is None:
-        if not API_KEY or API_KEY.startswith("sk-ant-PASTE"):
+        if _key_looks_unset(API_KEY):
             raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set. Add it to "
-                "`experiment/.env` and restart the server."
+                "OPENAI_API_KEY is not set. Add it to "
+                "`docs/.env` and restart the server."
             )
-        _client = anthropic.Anthropic(api_key=API_KEY)
+        _client = OpenAI(api_key=API_KEY)
     return _client
 
 
@@ -174,79 +184,70 @@ def post_hint(req: HintRequest) -> HintResponse:
         log.error(str(err))
         raise HTTPException(status_code=500, detail=str(err)) from err
 
-    # System-Prompt: statischer Block (cacheable, falls je groß genug) +
-    # per-trial Puzzle-Kontext.
-    system_blocks = [
-        {
-            "type": "text",
-            "text": build_static_system(req.condition),  # type: ignore[arg-type]
-            "cache_control": {"type": "ephemeral"},
-        },
-        {
-            "type": "text",
-            "text": build_puzzle_context(req.trial.model_dump()),
-        },
-    ]
+    # OpenAI: ein einzelner System-Prompt (BASE + condition + Puzzle-Kontext).
+    # OpenAI cached Prefix-Tokens automatisch ab gewisser Länge — kein
+    # explizites cache_control wie bei Anthropic nötig.
+    system_text = (
+        build_static_system(req.condition)  # type: ignore[arg-type]
+        + "\n\n"
+        + build_puzzle_context(req.trial.model_dump())
+    )
 
-    # Messages: gesamte History + neue User-Message.
-    # Beim ersten Hint-Klick (history leer, user_message=None) schicken wir
-    # eine neutrale Eröffnungsfrage, damit das Modell weiß, was zu tun ist.
+    # Messages für Chat Completions: erst System, dann History, dann neue
+    # User-Message. Beim ersten Hint-Klick (history leer, user_message=None)
+    # schicken wir eine neutrale Eröffnungsfrage, damit das Modell weiß, was
+    # zu tun ist.
     user_message = req.user_message or "Please give me a hint for this puzzle."
-    messages = [
-        {"role": m.role, "content": m.content} for m in req.history
-    ] + [{"role": "user", "content": user_message}]
+    messages: list[dict] = [{"role": "system", "content": system_text}]
+    messages.extend({"role": m.role, "content": m.content} for m in req.history)
+    messages.append({"role": "user", "content": user_message})
 
     started = time.perf_counter()
     try:
-        response = client.messages.create(
+        response = client.chat.completions.create(
             model=DEFAULT_MODEL,
             max_tokens=300,
-            system=system_blocks,
             messages=messages,
         )
-    except anthropic.AuthenticationError as err:
-        log.error("Anthropic auth error: %s", err)
+    except openai.AuthenticationError as err:
+        log.error("OpenAI auth error: %s", err)
         raise HTTPException(
             status_code=500,
-            detail="Anthropic API rejected the API key. Check `experiment/.env`.",
+            detail="OpenAI API rejected the API key. Check `docs/.env`.",
         ) from err
-    except anthropic.RateLimitError as err:
-        log.warning("Anthropic rate limit: %s", err)
+    except openai.RateLimitError as err:
+        log.warning("OpenAI rate limit: %s", err)
         raise HTTPException(
             status_code=503,
-            detail="Anthropic API rate-limited. Please wait a moment and try again.",
+            detail="OpenAI API rate-limited. Please wait a moment and try again.",
         ) from err
-    except anthropic.APIError as err:
-        log.error("Anthropic API error: %s", err)
+    except openai.APIError as err:
+        log.error("OpenAI API error: %s", err)
         raise HTTPException(
             status_code=502,
-            detail="Anthropic API returned an error.",
+            detail="OpenAI API returned an error.",
         ) from err
 
     latency_ms = int((time.perf_counter() - started) * 1000)
 
-    # Erste Text-Block-Antwort einsammeln — sollte für unsere kurzen Hints
-    # immer der einzige sein.
-    hint_text = ""
-    for block in response.content:
-        if block.type == "text":
-            hint_text = block.text.strip()
-            break
+    # Chat-Completions liefert die Antwort in choices[0].message.content.
+    hint_text = (response.choices[0].message.content or "").strip()
 
     if not hint_text:
-        log.error("Response without text block: %r", response.content)
+        log.error("Response without content: %r", response)
         raise HTTPException(
             status_code=502,
-            detail="Anthropic API returned an empty response.",
+            detail="OpenAI API returned an empty response.",
         )
 
+    usage = response.usage
     log.info(
         "hint condition=%s trial=%s latency=%dms in_tok=%d out_tok=%d",
         req.condition,
         req.trial.id,
         latency_ms,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
+        getattr(usage, "prompt_tokens", 0) if usage else 0,
+        getattr(usage, "completion_tokens", 0) if usage else 0,
     )
 
     return HintResponse(hint=hint_text, model=DEFAULT_MODEL)

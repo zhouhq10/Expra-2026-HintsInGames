@@ -7,11 +7,11 @@ Web-based prototype for the Expra-2026 project **"Hints in Games"** (TU Darmstad
 - **Frontend:** plain HTML/CSS/vanilla JS in `index.html`, `style.css`, `js/`. No build tools.
 - **Backend:** small FastAPI server in `server.py`. Two jobs:
   1. Static-file serving (replaces `python -m http.server`).
-  2. `/api/hint` — proxies requests to the Anthropic API. Keeps the API key server-side.
-- **Hints are generated at runtime by Claude.** Each condition (`direct`, `strategy`, `reflective`) gets its own system prompt from `prompts.py`. After the first hint, the participant can ask follow-up questions — the LLM stays strictly in its assigned hint type. The LLM is *told* the correct answer and rule, so it never has to work them out itself.
+  2. `/api/hint` — proxies requests to the OpenAI API (GPT). Keeps the API key server-side.
+- **Hints are generated at runtime by GPT.** Each condition (`direct`, `strategy`, `reflective`) gets its own system prompt from `prompts.py`. After the first hint, the participant can ask follow-up questions — the LLM stays strictly in its assigned hint type. The LLM is *told* the correct answer and rule, so it never has to work them out itself.
 - **Each task has a 2:30 time limit** with a visible countdown. When it runs out, the next task is shown automatically.
 - **Scoring:** a correct answer is worth 100 points plus a time bonus (`max(0, 150 − seconds taken)`), so faster answers score higher (max 250 per task). Unsolved tasks score 0.
-- **Results are saved automatically on the host computer** at the end (folder `experiment/data/results/`), even when a friend plays over the local network. A manual download button is also available as a backup.
+- **Results are saved automatically on the host computer** at the end (folder `docs/data/results/`), even when a friend plays over the local network. A manual download button is also available as a backup.
 
 ## Git / GitHub for beginners
 
@@ -127,7 +127,7 @@ Example: `git commit -m "fix: lightbulb was clickable in baseline phase"`
 
 ### What you should NOT push
 
-The file `experiment/.env` contains your API key and is therefore listed in `.gitignore` — git ignores it automatically and it never lands on GitHub. **Don't try to force it in.** If you accidentally push a key: revoke it immediately at [console.anthropic.com](https://console.anthropic.com) and create a new one.
+The file `docs/.env` contains your API key and is therefore listed in `.gitignore` — git ignores it automatically and it never lands on GitHub. **Don't try to force it in.** If you accidentally push a key: revoke it immediately at [platform.openai.com](https://platform.openai.com/api-keys) and create a new one.
 
 ---
 
@@ -143,10 +143,10 @@ fine. If you get an error, install Python 3 from
 [python.org/downloads](https://www.python.org/downloads/) and tick
 **"Add Python to PATH"** during the Windows installer.
 
-**1. Go into the experiment folder.** From the project folder you cloned:
+**1. Go into the `docs/` folder.** From the project folder you cloned:
 
 ```bash
-cd experiment
+cd docs
 ```
 
 **2. Create a virtual Python environment (once).** This keeps the project's
@@ -175,8 +175,9 @@ cp .env.example .env          # macOS/Linux
 ```
 
 Then open the new `.env` file in a text editor and paste your key after
-`ANTHROPIC_API_KEY=`. You get a key at
-[console.anthropic.com](https://console.anthropic.com). Without a valid key the
+`OPENAI_API_KEY=`. You get a key at
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys) (or your
+university account if a shared key has been provided). Without a valid key the
 page still loads, but the hint lightbulb won't return any hints.
 **Never share or commit this file** — it's gitignored on purpose.
 
@@ -205,7 +206,7 @@ Firefox, Safari, …) on the same computer that runs the server.
 **same Wi-Fi** as your computer, then send them the **Network** address
 (`http://192.168.x.x:8000`). They open it in their browser and play the
 experiment. **The results CSV is saved on *your* computer** (in
-`experiment/data/results/`), not on theirs — so you always get the data back.
+`docs/data/results/`), not on theirs — so you always get the data back.
 
 > The first time you start the server, macOS/Windows may pop up a firewall
 > dialog asking whether to allow incoming connections. Click **Allow**, otherwise
@@ -244,12 +245,12 @@ When a participant finishes, the CSV is **automatically saved on the computer
 running the server** (the host), in:
 
 ```
-experiment/data/results/experiment_<participant_id>_<condition>_<timestamp>.csv
+docs/data/results/experiment_<participant_id>_<condition>_<timestamp>.csv
 ```
 
 This works even when the participant played over the local network from another
 device. The end screen also has a **"Download data"** button that saves a copy in
-the participant's own browser — that's just a backup. (`experiment/data/results/`
+the participant's own browser — that's just a backup. (`docs/data/results/`
 is gitignored, so participant data never lands in the repo.)
 
 Each CSV has one row per task, followed by a short `SUMMARY` block (totals and
@@ -288,9 +289,9 @@ Columns (one row per task):
 ## Architecture
 
 ```
-Browser  ─POST /api/hint────►  server.py (FastAPI)  ─HTTPS─►  api.anthropic.com
+Browser  ─POST /api/hint────►  server.py (FastAPI)  ─HTTPS─►  api.openai.com
          ─POST /api/results─►       │
-                                    ├─ .env                  (ANTHROPIC_API_KEY — never visible in browser)
+                                    ├─ .env                  (OPENAI_API_KEY — never visible in browser)
                                     └─ data/results/*.csv    (results saved on the host)
 ```
 
@@ -303,10 +304,10 @@ Key points:
 
 ## Model choice
 
-Default: `claude-haiku-4-5` (cheapest option, good for high pilot volumes). Override via `LLM_MODEL=` in `.env`:
+Default: `gpt-4o-mini` (cheap and fast, good for high pilot volumes). Override via `LLM_MODEL=` in `.env`:
 
-- `claude-sonnet-4-6` — about 3x more expensive, stronger instruction following.
-- `claude-opus-4-7` — about 5x more expensive than sonnet, in case hint constraints get violated during the pilot.
+- `gpt-4o` — about 10x more expensive, noticeably stronger instruction following.
+- `gpt-5-mini` — modern, mid-range pricing, often stricter on the "never reveal the answer" rule.
 
 ## Known limitations / TODOs
 
