@@ -46,6 +46,13 @@
   // Interner Puffer aller Trial-Records.
   const records = [];
 
+  // Survey-Antworten am Ende des Experiments (key/value).
+  let survey = null;
+
+  function setSurvey(obj) {
+    survey = obj || null;
+  }
+
   /**
    * Fügt einen Trial-Record hinzu.
    * @param {Object} record - keys siehe CSV_COLUMNS, fehlende werden zu ''.
@@ -127,6 +134,16 @@
       rows.push([`${phase}_mean_solving_time_ms`, p.mean_solving_time_ms].join(','));
     }
 
+    // Survey-Block (falls vorhanden) — eigener Abschnitt nach SUMMARY.
+    if (survey) {
+      rows.push('');
+      rows.push('SURVEY');
+      rows.push(['question', 'answer'].join(','));
+      for (const key of Object.keys(survey)) {
+        rows.push([key, csvEscape(survey[key])].join(','));
+      }
+    }
+
     return rows.join('\n');
   }
 
@@ -177,5 +194,5 @@
     return s;
   }
 
-  window.logger = { logTrial, count, getSummary, buildCsv, downloadCsv, CSV_COLUMNS };
+  window.logger = { logTrial, count, getSummary, setSurvey, buildCsv, downloadCsv, CSV_COLUMNS };
 })();

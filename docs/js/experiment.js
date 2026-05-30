@@ -71,6 +71,7 @@
   const callbacks = {
     showPhaseIntro: null, // (phase, intro) => void
     showTrial: null,      // (trial, meta) => void
+    showSurvey: null,     // (summary) => void  — nach der letzten Phase, vor dem End-Screen
     showEnd: null,        // (summary) => void
     showFeedback: null,   // (kind: 'correct'|'wrong', msg: string) => void
     clearFeedback: null,  // () => void
@@ -364,7 +365,14 @@
     experimentState.currentTrialIdx = 0;
 
     if (experimentState.currentPhaseIdx >= PHASE_ORDER.length) {
-      callbacks.showEnd(window.logger.getSummary());
+      // Alle Phasen durch — erst Survey, dann End-Screen (passiert in main.js
+      // nach Submit). Falls keine Survey-Callback gesetzt: direkt End-Screen.
+      const summary = window.logger.getSummary();
+      if (callbacks.showSurvey) {
+        callbacks.showSurvey(summary);
+      } else {
+        callbacks.showEnd(summary);
+      }
       return;
     }
     showPhaseIntro();

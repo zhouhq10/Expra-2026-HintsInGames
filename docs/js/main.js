@@ -21,9 +21,14 @@
     welcome:    () => $('screen-welcome'),
     phaseIntro: () => $('screen-phase-intro'),
     trial:      () => $('screen-trial'),
+    survey:     () => $('screen-survey'),
     end:        () => $('screen-end'),
     error:      () => $('screen-error')
   };
+
+  // Wird zwischen showSurvey() und showEnd() gemerkt, damit die Endscreen-
+  // Zusammenfassung beim Survey-Submit noch verfügbar ist.
+  let pendingSummary = null;
 
   // Beim DOMContentLoaded los.
   document.addEventListener('DOMContentLoaded', boot);
@@ -51,6 +56,7 @@
     bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs });
     bindTrialScreen();
     bindPhaseIntroScreen();
+    bindSurveyScreen();
     bindEndScreen();
 
     // hints.init wird beim Klick auf "Experiment starten" aufgerufen,
@@ -60,6 +66,7 @@
     window.experiment.setCallbacks({
       showPhaseIntro: showPhaseIntro,
       showTrial:      showTrial,
+      showSurvey:     showSurvey,
       showEnd:        showEnd,
       showFeedback:   showFeedback,
       clearFeedback:  clearFeedback,
@@ -275,6 +282,36 @@
     const input = $('trial-answer-input');
     input.value = '';
     input.focus();
+  }
+
+  // ---------- Survey ----------------------------------------------------
+
+  function bindSurveyScreen() {
+    $('survey-form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+
+      const misclickEl = document.querySelector('input[name="survey-misclick"]:checked');
+      const backgroundEl = document.querySelector('input[name="survey-background"]:checked');
+
+      const survey = {
+        misclick:          misclickEl ? misclickEl.value : '',
+        strategy:          $('survey-strategy').value.trim(),
+        background:        backgroundEl ? backgroundEl.value : '',
+        background_detail: $('survey-background-detail').value.trim()
+      };
+
+      // Logger merkt sich die Survey-Antworten für den SURVEY-Block der CSV.
+      window.logger.setSurvey(survey);
+
+      // Jetzt zum End-Screen — der speichert die CSV auch automatisch
+      // serverseitig (inkl. der Survey-Daten).
+      showEnd(pendingSummary);
+    });
+  }
+
+  function showSurvey(summary) {
+    pendingSummary = summary;
+    showScreen('survey');
   }
 
   // ---------- End -------------------------------------------------------

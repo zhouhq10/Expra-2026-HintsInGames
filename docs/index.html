@@ -173,6 +173,65 @@
       </div>
     </section>
 
+    <!-- Survey: shown after the test phase, before the end screen. -->
+    <section id="screen-survey" class="screen" hidden>
+      <h2>One last thing — a short survey</h2>
+      <p>
+        Your answers help us interpret the results. Nothing here is graded;
+        feel free to leave fields empty if they don't apply.
+      </p>
+
+      <form id="survey-form" class="survey-form">
+        <fieldset class="survey-fieldset">
+          <legend>Did you accidentally submit a wrong answer at any point (a "misclick")?</legend>
+          <label>
+            <input type="radio" name="survey-misclick" value="no" checked />
+            <span>No — all of my answers were intentional</span>
+          </label>
+          <label>
+            <input type="radio" name="survey-misclick" value="yes" />
+            <span>Yes, at least once</span>
+          </label>
+          <label>
+            <input type="radio" name="survey-misclick" value="unsure" />
+            <span>I'm not sure</span>
+          </label>
+        </fieldset>
+
+        <fieldset class="survey-fieldset">
+          <legend>Did you follow a particular strategy when looking for the next number? If so, describe it briefly.</legend>
+          <textarea
+            id="survey-strategy"
+            rows="4"
+            placeholder="e.g. I first looked at the differences between numbers, then I tried multiplication…"
+          ></textarea>
+        </fieldset>
+
+        <fieldset class="survey-fieldset">
+          <legend>What is your academic background?</legend>
+          <label><input type="radio" name="survey-background" value="mathematics" /> <span>Mathematics</span></label>
+          <label><input type="radio" name="survey-background" value="computer_science" /> <span>Computer science / informatics</span></label>
+          <label><input type="radio" name="survey-background" value="physics" /> <span>Physics</span></label>
+          <label><input type="radio" name="survey-background" value="engineering" /> <span>Engineering</span></label>
+          <label><input type="radio" name="survey-background" value="natural_sciences" /> <span>Other natural sciences (chemistry, biology, …)</span></label>
+          <label><input type="radio" name="survey-background" value="cognitive_psychology" /> <span>Cognitive science / psychology</span></label>
+          <label><input type="radio" name="survey-background" value="humanities_social" /> <span>Humanities / social sciences</span></label>
+          <label><input type="radio" name="survey-background" value="other" checked /> <span>Other / none of the above</span></label>
+
+          <label for="survey-background-detail" class="survey-detail-label">
+            Anything you want to add (semester, prior math experience, current course, …):
+          </label>
+          <textarea
+            id="survey-background-detail"
+            rows="2"
+            placeholder="(optional)"
+          ></textarea>
+        </fieldset>
+
+        <button type="submit" class="primary">Submit and finish</button>
+      </form>
+    </section>
+
     <!-- End screen: thanks + CSV download -->
     <section id="screen-end" class="screen" hidden>
       <h2>Thank you for participating!</h2>
