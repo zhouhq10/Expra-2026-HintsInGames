@@ -26,6 +26,7 @@
     'is_correct',
     'was_skipped',
     'timed_out',
+    'is_practice',
     'test_mode',
     'is_bottleneck',
     'solving_time_ms',
@@ -71,21 +72,24 @@
    * Summary-Block der CSV. Liefert Gesamtwerte und Mittelwerte je Phase.
    */
   function getSummary() {
-    const numTasks = records.length;
-    const numCorrect = records.filter((r) => r.is_correct).length;
-    const totalPoints = records.reduce(
+    // Practice-Zeilen aus den Aggregaten ausschließen — sie sind Übung,
+    // nicht Teil der eigentlichen Studie.
+    const scored = records.filter((r) => !r.is_practice);
+    const numTasks = scored.length;
+    const numCorrect = scored.filter((r) => r.is_correct).length;
+    const totalPoints = scored.reduce(
       (sum, r) => sum + (Number(r.points_total) || 0), 0
     );
     const meanTime = numTasks
       ? Math.round(
-          records.reduce((s, r) => s + (Number(r.solving_time_ms) || 0), 0) / numTasks
+          scored.reduce((s, r) => s + (Number(r.solving_time_ms) || 0), 0) / numTasks
         )
       : 0;
 
     // Mittelwerte je Phase (Lösungszeit + Anteil korrekt).
     const perPhase = {};
     for (const phase of ['baseline', 'training', 'test']) {
-      const rs = records.filter((r) => r.phase === phase);
+      const rs = scored.filter((r) => r.phase === phase);
       if (!rs.length) continue;
       perPhase[phase] = {
         num_tasks: rs.length,

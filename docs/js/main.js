@@ -18,12 +18,22 @@
   // DOM-Referenzen (einmal cachen).
   const $ = (id) => document.getElementById(id);
   const screens = {
-    welcome:    () => $('screen-welcome'),
-    phaseIntro: () => $('screen-phase-intro'),
-    trial:      () => $('screen-trial'),
-    survey:     () => $('screen-survey'),
-    end:        () => $('screen-end'),
-    error:      () => $('screen-error')
+    consent:      () => $('screen-consent'),
+    welcome:      () => $('screen-welcome'),
+    phaseIntro:   () => $('screen-phase-intro'),
+    trial:        () => $('screen-trial'),
+    instructions: () => $('screen-instructions'),
+    quiz:         () => $('screen-quiz'),
+    survey:       () => $('screen-survey'),
+    end:          () => $('screen-end'),
+    error:        () => $('screen-error')
+  };
+
+  // Korrekte Antworten für den Quiz — geändert werden? Hier eintragen.
+  const QUIZ_ANSWERS = {
+    'quiz-q1': '2m30s',
+    'quiz-q2': 'next_zero',
+    'quiz-q3': 'training'
   };
 
   // Wird zwischen showSurvey() und showEnd() gemerkt, damit die Endscreen-
@@ -53,9 +63,12 @@
       return;
     }
 
+    bindConsentScreen();
     bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs });
     bindTrialScreen();
     bindPhaseIntroScreen();
+    bindInstructionsScreen();
+    bindQuizScreen();
     bindSurveyScreen();
     bindEndScreen();
 
@@ -64,19 +77,32 @@
 
     // Engine bekommt UI-Callbacks — der Engine-Code selbst kennt kein DOM.
     window.experiment.setCallbacks({
-      showPhaseIntro: showPhaseIntro,
-      showTrial:      showTrial,
-      showSurvey:     showSurvey,
-      showEnd:        showEnd,
-      showFeedback:   showFeedback,
-      clearFeedback:  clearFeedback,
-      updateTimer:    updateTimer,
-      updateScore:    updateScore,
-      setSkipVisible: setSkipVisible,
-      resetInput:     resetTrialInput
+      showPhaseIntro:      showPhaseIntro,
+      showTrial:           showTrial,
+      showInstructions:    showInstructions,
+      showSurvey:          showSurvey,
+      showEnd:             showEnd,
+      showFeedback:        showFeedback,
+      clearFeedback:       clearFeedback,
+      updateTimer:         updateTimer,
+      updateScore:         updateScore,
+      setSkipVisible:      setSkipVisible,
+      setPracticeBanner:   setPracticeBanner,
+      setInputEnabled:     setInputEnabled,
+      setHintArrowVisible: setHintArrowVisible,
+      resetInput:          resetTrialInput
     });
 
-    showScreen('welcome');
+    // Erster Screen ist der Consent.
+    showScreen('consent');
+  }
+
+  // ---------- Consent ---------------------------------------------------
+
+  function bindConsentScreen() {
+    $('consent-btn').addEventListener('click', () => {
+      showScreen('welcome');
+    });
   }
 
   // ---------- URL / Condition / Participant-ID --------------------------
@@ -171,13 +197,17 @@
       // Hints-Modul jetzt initialisieren — wir kennen erst hier die
       // endgültige Condition.
       window.hints.init(condition, {
-        lightbulbBtn:  $('hint-lightbulb-btn'),
-        panelEl:       $('hint-panel'),
-        closeBtn:      $('hint-close-btn'),
-        messagesEl:    $('hint-messages'),
-        followupForm:  $('hint-followup-form'),
-        followupInput: $('hint-followup-input'),
-        errorEl:       $('hint-error')
+        lightbulbBtn:    $('hint-lightbulb-btn'),
+        panelEl:         $('hint-panel'),
+        closeBtn:        $('hint-close-btn'),
+        messagesEl:      $('hint-messages'),
+        followupForm:    $('hint-followup-form'),
+        followupInput:   $('hint-followup-input'),
+        errorEl:         $('hint-error'),
+        // hints.js feuert das hier nach dem ersten Hint pro Trial — wir
+        // reichen das weiter an die Engine, damit sie Pfeil + Input-Lock
+        // aufhebt (relevant für forced-hint Practice-Trials).
+        onHintDelivered: () => window.experiment.onHintReceived()
       });
 
       const testMode = $('welcome-test-mode').checked;
@@ -263,11 +293,45 @@
 
   function updateTimer(remainingMs) {
     const el = $('trial-timer');
+    if (remainingMs === null || remainingMs === undefined) {
+      // Practice (kein Timer) — neutral anzeigen, ohne Warn-Highlight.
+      el.textContent = '--:--';
+      el.classList.remove('is-low');
+      return;
+    }
     const totalSec = Math.max(0, Math.ceil(remainingMs / 1000));
     const mm = Math.floor(totalSec / 60);
     const ss = String(totalSec % 60).padStart(2, '0');
     el.textContent = `${mm}:${ss}`;
     el.classList.toggle('is-low', totalSec <= 30);
+  }
+
+  function setPracticeBanner(text) {
+    const el = $('trial-practice-banner');
+    if (text) {
+      el.textContent = text;
+      el.hidden = false;
+    } else {
+      el.textContent = '';
+      el.hidden = true;
+    }
+  }
+
+  function setInputEnabled(enabled) {
+    const input = $('trial-answer-input');
+    input.disabled = !enabled;
+    if (enabled) {
+      input.placeholder = '';
+      // Im aktiven Trial-Screen sofort Fokus reingeben — komfortabel, sobald
+      // das Eingabefeld nach Hint-Lock freigeschaltet wird.
+      input.focus();
+    } else {
+      input.placeholder = 'Click the lightbulb first…';
+    }
+  }
+
+  function setHintArrowVisible(visible) {
+    $('hint-arrow').hidden = !visible;
   }
 
   function updateScore(totalScore) {
@@ -282,6 +346,45 @@
     const input = $('trial-answer-input');
     input.value = '';
     input.focus();
+  }
+
+  // ---------- Instructions + Quiz --------------------------------------
+
+  function bindInstructionsScreen() {
+    $('instructions-continue-btn').addEventListener('click', () => {
+      // Vor jedem Quiz-Aufruf: alte Auswahl beibehalten ist OK, aber Retry-
+      // Hinweis ausblenden (wird vom showInstructions-Callback gesetzt).
+      showScreen('quiz');
+    });
+  }
+
+  /** Aus experiment.js gerufen, nachdem alle Practice-Trials durch sind
+   *  und bei jedem Quiz-Failure erneut. */
+  function showInstructions(retry) {
+    $('instructions-retry-note').hidden = !retry;
+    showScreen('instructions');
+  }
+
+  function bindQuizScreen() {
+    $('quiz-form').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      let allCorrect = true;
+      for (const name of Object.keys(QUIZ_ANSWERS)) {
+        const selected = document.querySelector(`input[name="${name}"]:checked`);
+        if (!selected || selected.value !== QUIZ_ANSWERS[name]) {
+          allCorrect = false;
+          break;
+        }
+      }
+      if (allCorrect) {
+        // Quiz bestanden → Baseline-Intro anzeigen.
+        window.experiment.startMainFromInstructions();
+      } else {
+        // Falsch → zurück zu Instructions mit Retry-Hinweis. Antworten
+        // bleiben stehen, damit der Teilnehmer korrigieren kann.
+        showInstructions(true);
+      }
+    });
   }
 
   // ---------- Survey ----------------------------------------------------

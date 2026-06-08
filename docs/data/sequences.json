@@ -1,5 +1,78 @@
 [
   {
+    "id": "prac_01",
+    "phase": "practice",
+    "difficulty": 1,
+    "is_practice": true,
+    "sequence": ["2", "4", "6", "8"],
+    "answer": 10,
+    "rule": "Add 2 to the previous term.",
+    "practice_banner": null,
+    "practice_hints": null,
+    "is_bottleneck": false
+  },
+  {
+    "id": "prac_02",
+    "phase": "practice",
+    "difficulty": 2,
+    "is_practice": true,
+    "requires_hint": true,
+    "sequence": ["1", "3", "9", "27"],
+    "answer": 81,
+    "rule": "Multiply the previous term by 3.",
+    "practice_banner": "Try the lightbulb in the top-right corner — that's how you'll request a hint later.",
+    "practice_hints": {
+      "direct": "Multiply the previous number by 3 to get the next.",
+      "strategy": "When numbers grow quickly, check whether each is a fixed multiple of the previous one.",
+      "reflective": "What do you get if you divide 27 by 9? And 9 by 3?"
+    },
+    "is_bottleneck": false
+  },
+  {
+    "id": "prac_03",
+    "phase": "practice",
+    "difficulty": 3,
+    "is_practice": true,
+    "requires_hint": true,
+    "sequence": ["1", "4", "9", "16", "25"],
+    "answer": 36,
+    "rule": "Each term is the square of its position (1^2, 2^2, 3^2, ...).",
+    "practice_banner": "Feel free to use the hint again. This is just a practice run.",
+    "practice_hints": {
+      "direct": "Each term is the square of its position in the sequence (1, 4, 9, 16, 25 = 1^2, 2^2, 3^2, 4^2, 5^2).",
+      "strategy": "When the gaps grow steadily larger, the rule is often a position-dependent formula like n^2.",
+      "reflective": "What do these numbers have in common: 1, 4, 9, 16, 25?"
+    },
+    "is_bottleneck": false
+  },
+  {
+    "id": "prac_04",
+    "phase": "practice",
+    "difficulty": 2,
+    "is_practice": true,
+    "control_only": true,
+    "sequence": ["5", "10", "15", "20"],
+    "answer": 25,
+    "rule": "Add 5 to the previous term.",
+    "practice_banner": null,
+    "practice_hints": null,
+    "is_bottleneck": false
+  },
+  {
+    "id": "prac_05",
+    "phase": "practice",
+    "difficulty": 3,
+    "is_practice": true,
+    "control_only": true,
+    "sequence": ["10", "8", "6", "4"],
+    "answer": 2,
+    "rule": "Subtract 2 from the previous term.",
+    "practice_banner": null,
+    "practice_hints": null,
+    "is_bottleneck": false
+  },
+
+  {
     "id": "base_01",
     "phase": "baseline",
     "difficulty": 1,

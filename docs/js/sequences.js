@@ -54,7 +54,7 @@
 
   /** Gruppiert nach Phase und sortiert jede Gruppe nach difficulty. */
   function groupByPhase(all) {
-    const grouped = { baseline: [], training: [], test: [] };
+    const grouped = { practice: [], baseline: [], training: [], test: [] };
 
     for (const seq of all) {
       if (!grouped[seq.phase]) {

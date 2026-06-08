@@ -17,8 +17,14 @@
 (function () {
   'use strict';
 
+  // Latenz, mit der ein Practice-Mock-Hint simuliert wird — gibt dem
+  // Teilnehmer das Gefühl, das "LLM denkt". Echte Trainings-Hints warten
+  // ohnehin auf den Server.
+  const PRACTICE_MOCK_DELAY_MS = 1000;
+
   // Persistenter Modul-State (über Trials hinweg).
   let condition = null;
+  let onHintDelivered = null; // optionaler Callback, ruft main.js nach 1. Hint
   let dom = {
     lightbulbBtn: null,
     panelEl: null,
@@ -44,6 +50,11 @@
 
   function init(cond, refs) {
     condition = cond;
+    // Optionalen Callback rausziehen, bevor refs in dom kopiert wird —
+    // er gehört nicht zu den DOM-Refs.
+    onHintDelivered = (refs && typeof refs.onHintDelivered === 'function')
+      ? refs.onHintDelivered
+      : null;
     dom = { ...dom, ...refs };
 
     // Defensiv: alle erwarteten Refs prüfen, damit ein versehentlich alter
@@ -143,8 +154,28 @@
   function isHintAvailable() {
     if (!currentTrial) return false;
     if (condition === 'control') return false;
-    if (currentTrial.phase !== 'training') return false;
-    return true;
+    // Training: immer (echtes LLM). Practice: nur wenn für die aktuelle
+    // Condition ein vordefinierter Mock-Hint hinterlegt ist (sonst keine
+    // Glühbirne — z.B. erste Practice-Aufgabe, die nur das Eingabefeld übt).
+    if (currentTrial.phase === 'training') return true;
+    if (currentTrial.is_practice
+        && currentTrial.practice_hints
+        && currentTrial.practice_hints[condition]) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Wird nur im Practice-Modus aufgerufen — verwendet einen fest hinterlegten
+   * Hint statt einer LLM-Anfrage. Für Rückfragen (userMessage gesetzt)
+   * wiederholen wir denselben Mock-Hint, weil wir keine LLM-Konversation
+   * simulieren möchten. So bleibt das Experiment für alle Practice-
+   * Teilnehmer in derselben Condition identisch.
+   */
+  function practiceMockHint() {
+    const hints = currentTrial.practice_hints || {};
+    return hints[condition] || '';
   }
 
   function resetPanel() {
@@ -175,6 +206,51 @@
     }
 
     dom.followupForm.hidden = true;
+
+    // Typing-Indikator anzeigen, solange auf die Antwort gewartet wird.
+    // Wird in beiden Pfaden (Mock + Server) am Ende wieder entfernt.
+    const typingEl = appendTypingBubble();
+
+    // Practice-Trials: **nur der erste Hint** ist der vordefinierte Mock,
+    // damit alle Teilnehmer derselben Bedingung mit identischer Information
+    // starten. Rückfragen (= alles nach dem ersten Hint) gehen ganz normal
+    // an den Server — so erlebt der Teilnehmer einen echten LLM-Dialog wie
+    // in der Trainingsphase, mit dem Mock-Hint als bereits etabliertem
+    // ersten Assistant-Turn in der History.
+    const isFirstPracticeHint =
+      currentTrial && currentTrial.is_practice
+      && hintCount === 0 && !userMessage;
+    if (isFirstPracticeHint) {
+      const mock = practiceMockHint();
+      await new Promise((res) => setTimeout(res, PRACTICE_MOCK_DELAY_MS));
+      removeTypingBubble(typingEl);
+      if (!mock) {
+        dom.errorEl.textContent =
+          'No hint available for this practice task. You can still solve it on your own.';
+        dom.errorEl.hidden = false;
+        if (userMessage) conversation.pop();
+        inFlight = false;
+        return;
+      }
+      conversation.push({ role: 'assistant', content: mock });
+      hintTexts.push(mock);
+      llmModel = 'practice-mock';
+      hintCount += 1;
+      if (hintCount === 1) {
+        hintTrigger = trigger;
+        timeToFirstHintMs = Math.round(performance.now() - trialStartTs);
+      }
+      appendBubble('assistant', mock);
+      dom.followupForm.hidden = false;
+      if (!dom.panelEl.hidden) dom.followupInput.focus();
+      // Nur beim allerersten Hint dieses Trials das "delivered"-Signal feuern,
+      // damit der Pfeil nicht bei Rückfragen erneut getriggert wird.
+      if (hintCount === 1 && typeof onHintDelivered === 'function') {
+        onHintDelivered(currentTrial);
+      }
+      inFlight = false;
+      return;
+    }
 
     try {
       const resp = await fetch('/api/hint', {
@@ -218,14 +294,20 @@
         timeToFirstHintMs = Math.round(performance.now() - trialStartTs);
       }
 
+      removeTypingBubble(typingEl);
       appendBubble('assistant', hintText);
       dom.followupForm.hidden = false;
       // Falls das Panel offen ist, Fokus ins Eingabefeld für Rückfrage.
       if (!dom.panelEl.hidden) {
         dom.followupInput.focus();
       }
+      // Nur beim allerersten Hint dieses Trials das "delivered"-Signal feuern.
+      if (hintCount === 1 && typeof onHintDelivered === 'function') {
+        onHintDelivered(currentTrial);
+      }
     } catch (err) {
       console.error('Hint request failed:', err);
+      removeTypingBubble(typingEl);
       dom.errorEl.textContent =
         'Hint currently unavailable. Please try again, or solve the task without a hint.';
       dom.errorEl.hidden = false;
@@ -247,6 +329,26 @@
     dom.messagesEl.appendChild(el);
     // Auto-scroll, damit neue Nachrichten immer sichtbar sind.
     dom.messagesEl.scrollTop = dom.messagesEl.scrollHeight;
+  }
+
+  /** Hängt einen animierten "..." Typing-Indikator an und gibt das Element
+   *  zurück, damit es nach Eintreffen des Hints wieder entfernt werden kann. */
+  function appendTypingBubble() {
+    const wrap = document.createElement('div');
+    wrap.className = 'hint-typing-bubble';
+    wrap.setAttribute('aria-label', 'Hint is being generated');
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      wrap.appendChild(dot);
+    }
+    dom.messagesEl.appendChild(wrap);
+    dom.messagesEl.scrollTop = dom.messagesEl.scrollHeight;
+    return wrap;
+  }
+
+  function removeTypingBubble(el) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
   async function safeReadDetail(resp) {
