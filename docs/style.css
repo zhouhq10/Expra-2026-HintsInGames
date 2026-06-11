@@ -31,6 +31,29 @@ body {
   line-height: 1.5;
 }
 
+/* ---------- Persistent progress bar -------------------------------- */
+
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  z-index: 200;
+}
+
+.progress-bar[hidden] {
+  display: none;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 350ms ease;
+}
+
 /* Container = Vollbild, ein Screen = ein Vollbild-Flex-Container.
  * `[hidden]` versteckt Screens, alle anderen werden zentriert dargestellt. */
 .container {
@@ -660,4 +683,135 @@ button.secondary {
 button.secondary:hover {
   color: var(--fg);
   border-color: var(--fg-muted);
+}
+
+/* ---------- Lightbulb glow (training, 1:00 elapsed) -------------- */
+
+.lightbulb-btn.is-glowing {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 0 rgba(95, 168, 211, 0.55);
+  animation: lightbulb-glow 1.4s ease-in-out infinite;
+}
+
+@keyframes lightbulb-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(95, 168, 211, 0.45); }
+  50%      { box-shadow: 0 0 0 8px rgba(95, 168, 211, 0); }
+}
+
+/* ---------- Speech bubble next to the lightbulb ----------------- */
+
+.hint-speech-bubble {
+  position: absolute;
+  top: 1.9rem;
+  right: 5.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  padding: 0.45rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  max-width: 16rem;
+  text-align: right;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  animation: speech-bubble-pop 280ms ease-out;
+}
+
+.hint-speech-bubble[hidden] {
+  display: none;
+}
+
+/* Small triangle pointing toward the lightbulb. */
+.hint-speech-bubble::after {
+  content: "";
+  position: absolute;
+  top: 0.7rem;
+  right: -0.45rem;
+  width: 0;
+  height: 0;
+  border-top: 0.4rem solid transparent;
+  border-bottom: 0.4rem solid transparent;
+  border-left: 0.5rem solid var(--accent);
+}
+
+@keyframes speech-bubble-pop {
+  0%   { opacity: 0; transform: translateY(-4px) scale(0.95); }
+  100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* ---------- Trial score: pulse + floating "+N" ------------------ */
+
+.trial-score.is-pulsing {
+  animation: score-pulse 460ms ease-out;
+}
+
+@keyframes score-pulse {
+  0%   { transform: scale(1);    color: var(--fg-muted); }
+  35%  { transform: scale(1.18); color: var(--accent); }
+  100% { transform: scale(1);    color: var(--fg-muted); }
+}
+
+.score-float {
+  position: absolute;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 1.1rem;
+  pointer-events: none;
+  animation: score-floatup 900ms ease-out forwards;
+}
+
+@keyframes score-floatup {
+  0%   { opacity: 0; transform: translateY(0); }
+  15%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-2.4rem); }
+}
+
+/* ---------- End-screen celebration ------------------------------ */
+
+.end-score {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.end-score-breakdown {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+  margin-top: 0.4rem;
+}
+
+.end-score-breakdown span strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.confetti {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 999;
+}
+
+.confetti-particle {
+  position: absolute;
+  top: -2rem;
+  width: 10px;
+  height: 16px;
+  background: var(--accent);
+  opacity: 0.95;
+  border-radius: 2px;
+  animation: confetti-fall var(--dur, 2400ms) ease-in var(--delay, 0ms) forwards;
+}
+
+@keyframes confetti-fall {
+  0%   { transform: translate(0, 0)                 rotate(var(--rot, 0deg)); opacity: 1; }
+  100% { transform: translate(var(--drift, 0px), 105vh) rotate(calc(var(--rot, 0deg) + 540deg)); opacity: 0; }
 }

@@ -15,10 +15,27 @@
 (function () {
   'use strict';
 
-  const CORRECT_FEEDBACK_MS = 1500;     // Auto-Advance-Delay nach richtiger Antwort
-  const DEFAULT_TIME_LIMIT_MS = 150000; // 2:30 Zeitlimit pro Aufgabe (Default)
-  const COMPLETION_POINTS = 100;        // Fixpunkte fürs Lösen
-  const MAX_TIME_BONUS = 150;           // Zeitbonus = max(0, MAX_TIME_BONUS - Sekunden)
+  const CORRECT_FEEDBACK_MS = 1500;        // Auto-Advance-Delay nach richtiger Antwort
+  const DEFAULT_TIME_LIMIT_MS = 150000;    // Fallback (Training), wenn Phase kein Mapping hat
+  const COMPLETION_POINTS = 100;           // Fixpunkte fürs Lösen
+  const WRONG_PENALTY = 10;                // Punktabzug pro Fehlversuch
+  const MAX_WRONG_ATTEMPTS = 5;            // Nach so vielen Fehlern → Aufgabe übersprungen
+  const WRONG_WARNING_AT = 3;              // Nach so vielen Fehlern → "2 attempts left" Hinweis
+
+  // Phasen-Timer: Practice ohne, Baseline + Test 2:30, Training 3:00
+  // (mehr Zeit, weil dort die LLM-Hint-Konversation reinpasst).
+  const PHASE_TIME_LIMITS_MS = {
+    practice: null,
+    baseline: 150000,
+    training: 180000,
+    test:     150000
+  };
+
+  // Bruchteile des Trial-Timers, an denen die Training-Hint-Suggestion bzw.
+  // -Enforcement losgeht. 60/180 = 1/3 und 90/180 = 1/2 (so bleibt der
+  // ?timelimit=-Override beim Testen sinnvoll skaliert).
+  const HINT_GLOW_AT_FRACTION = 1 / 3;
+  const HINT_ENFORCE_AT_FRACTION = 1 / 2;
 
   // Phase-transition copy. One place, easy to edit.
   const PHASE_INTROS = {
@@ -29,29 +46,31 @@
         'there is no time limit here, and these tasks do not count toward your score.'
     },
     baseline: {
-      title: 'Phase 1 of 3: Warm-up',
+      title: 'Phase 1 of 3: Baseline',
       text:
         'You will see several number sequences without any help. ' +
         'Find the missing number marked "?". You have 2:30 per task — ' +
-        'a correct answer scores 100 points plus a bonus for solving quickly.'
+        'a correct answer scores 100 points plus a bonus for solving quickly. ' +
+        'These questions are meant to be hard — don\'t get discouraged if you can\'t solve them all.'
     },
     training: {
       title: 'Phase 2 of 3: Training',
       text:
-        'In this phase you may request hints if you need them. ' +
-        'The same 2:30 time limit and scoring apply to every task.'
+        'In this phase you may request hints from the AI helper. ' +
+        'You have 3:00 per task — a little extra time so you can read the hint. ' +
+        'Points and bonus work the same way.'
     },
     test: {
       title: 'Phase 3 of 3: Test',
       text:
         'In the final section you solve without hints again. ' +
-        'Same rules: 2:30 per task, points for speed. Do your best.'
+        'You have 2:30 per task. Do your best.'
     }
   };
 
   const PHASE_LABELS = {
     practice: 'Practice',
-    baseline: 'Warm-up phase',
+    baseline: 'Baseline phase',
     training: 'Training phase',
     test: 'Test phase'
   };
@@ -70,10 +89,13 @@
     currentPhaseIdx: 0,      // index in PHASE_ORDER
     currentTrialIdx: 0,
     currentTrialState: null,
-    timeLimitMs: DEFAULT_TIME_LIMIT_MS, // pro Aufgabe; per ?timelimit= überschreibbar
+    timeLimitOverrideMs: null, // optionaler Override aus ?timelimit=...
     testMode: false,         // Test-Modus: Skip-Button im Trial-Screen einblenden
     quizPassed: false,       // Gating: erst nach Quiz-Pass startet die Baseline
     totalScore: 0,           // kumulative Punkte über alle Trials
+    scoresByPhase: { baseline: 0, training: 0, test: 0 },
+    mainTrialsCompleted: 0,  // Zähler für die Progress-Bar (nur Hauptphasen)
+    totalMainTrials: 0,      // wird in init() aus den Sequenzen errechnet
     log: []                  // referenziert die Records des Loggers (informativ)
   };
 
@@ -92,6 +114,11 @@
     setPracticeBanner: null,     // (text: string|null) => void — Practice-Banner setzen/verbergen
     setInputEnabled: null,       // (enabled: boolean) => void — Eingabe sperren in forced-hint Practice
     setHintArrowVisible: null,   // (visible: boolean) => void — Pfeil auf Glühbirne in forced-hint Practice
+    setHintGlow: null,           // (active: boolean) => void — Glühbirne pulsen lassen (60s)
+    setSpeechBubble: null,       // (text: string|null) => void — "Maybe you want to take a hint?"
+    setProgressVisible: null,    // (visible: boolean) => void — Progress-Balken oben
+    updateProgress: null,        // (done: number, total: number) => void
+    getScratchpadText: null,     // () => string — Scratchpad-Inhalt fürs Logging
     resetInput: null             // () => void
   };
 
@@ -106,13 +133,17 @@
     experimentState.currentPhaseIdx = 0;
     experimentState.currentTrialIdx = 0;
     experimentState.currentTrialState = null;
-    experimentState.timeLimitMs =
-      Number.isFinite(timeLimitMs) && timeLimitMs > 0
-        ? timeLimitMs
-        : DEFAULT_TIME_LIMIT_MS;
+    experimentState.timeLimitOverrideMs =
+      Number.isFinite(timeLimitMs) && timeLimitMs > 0 ? timeLimitMs : null;
     experimentState.testMode = !!testMode;
     experimentState.quizPassed = false;
     experimentState.totalScore = 0;
+    experimentState.scoresByPhase = { baseline: 0, training: 0, test: 0 };
+    experimentState.mainTrialsCompleted = 0;
+    experimentState.totalMainTrials =
+      (sequences.baseline || []).length
+      + (sequences.training || []).length
+      + (sequences.test || []).length;
 
     // Practice-Filter je Bedingung:
     //   - Control: hat keine Glühbirne → forced-hint-Trials (prac_02/03)
@@ -198,11 +229,43 @@
       return;
     }
 
-    // Falsche Antwort in Haupt-Phasen: weitermachen lassen, bis die Zeit abläuft.
+    // Falsche Antwort in Haupt-Phasen.
     trialState.numWrongAttempts += 1;
     trialState.lastAnswer = String(parsed);
-    callbacks.showFeedback('wrong', "That's not correct — try again.");
+    const wrongs = trialState.numWrongAttempts;
+
+    // 5-Trial-Skip: nach so vielen falschen Antworten wird die Aufgabe als
+    // nicht-gelöst beendet und der nächste Trial gestartet.
+    if (wrongs >= MAX_WRONG_ATTEMPTS) {
+      stopTimer();
+      finalizeTrial({
+        participantAnswer: String(parsed),
+        isCorrect: false,
+        wasSkipped: false,
+        timedOut: false
+      });
+      callbacks.showFeedback('wrong', `${MAX_WRONG_ATTEMPTS} attempts used — moving on.`);
+      setTimeout(() => {
+        callbacks.clearFeedback();
+        advanceTrial();
+      }, CORRECT_FEEDBACK_MS);
+      return;
+    }
+
+    // 3-Versuche-Warnung (Hauptphasen): zusätzlicher Hinweis, dass nur noch
+    // 2 Versuche bleiben, bevor die Aufgabe übersprungen wird.
+    let feedback = "That's not correct — try again.";
+    if (wrongs === WRONG_WARNING_AT) {
+      const left = MAX_WRONG_ATTEMPTS - wrongs;
+      feedback = `That's not correct — ${left} attempts left.`;
+    }
+    callbacks.showFeedback('wrong', feedback);
     callbacks.resetInput();
+
+    // Training mit Hint-Bedingung: nach 3 Fehlern Hint zwangsweise einfordern.
+    if (wrongs >= WRONG_WARNING_AT && isTrainingHintTrial(trial) && !trialState.hintReceived) {
+      enforceHint();
+    }
   }
 
   /**
@@ -214,8 +277,13 @@
     if (!trialState) return;
     if (trialState.hintReceived) return; // schon erledigt
     trialState.hintReceived = true;
+    trialState.hintEnforced = false;
+    // Komplette UI-Bereinigung: Eingabe wieder frei, Pfeil/Banner/Sprechblase/Glow weg.
     if (callbacks.setInputEnabled) callbacks.setInputEnabled(true);
     if (callbacks.setHintArrowVisible) callbacks.setHintArrowVisible(false);
+    if (callbacks.setSpeechBubble) callbacks.setSpeechBubble(null);
+    if (callbacks.setHintGlow) callbacks.setHintGlow(false);
+    if (callbacks.setPracticeBanner) callbacks.setPracticeBanner(null);
   }
 
   /**
@@ -266,6 +334,39 @@
     }
   }
 
+  /** Liefert das Zeitlimit für eine Aufgabe.
+   *  - Practice: kein Timer (null).
+   *  - Sonst: Override aus URL-Param, sonst Phasen-Mapping, sonst Default. */
+  function trialTimeLimitMs(trial) {
+    if (trial.is_practice) return null;
+    if (experimentState.timeLimitOverrideMs) return experimentState.timeLimitOverrideMs;
+    return PHASE_TIME_LIMITS_MS[trial.phase] || DEFAULT_TIME_LIMIT_MS;
+  }
+
+  /** Eskaliert in Training: räumt die "soft suggestion"-UI (Glow + Sprechblase)
+   *  weg und öffnet automatisch das Hint-Panel mit echter LLM-Anfrage —
+   *  als hätte der Teilnehmer die Glühbirne selbst geklickt. Eingabefeld
+   *  bleibt frei, kein Lock-Banner, kein Pfeil. */
+  function enforceHint() {
+    const ts = experimentState.currentTrialState;
+    if (!ts || ts.hintEnforced || ts.hintReceived) return;
+    ts.hintEnforced = true;
+    if (callbacks.setSpeechBubble) callbacks.setSpeechBubble(null);
+    if (callbacks.setHintGlow) callbacks.setHintGlow(false);
+    if (window.hints && window.hints.autoTriggerHint) {
+      window.hints.autoTriggerHint();
+    }
+  }
+
+  /** Wahr, wenn der aktuelle Trial eine Trainings-Aufgabe mit Hint-Bedingung ist
+   *  (also nicht control und nicht practice). Praxis-Forced-Hint läuft separat. */
+  function isTrainingHintTrial(trial) {
+    return trial
+      && trial.phase === 'training'
+      && !trial.is_practice
+      && experimentState.condition !== 'control';
+  }
+
   function currentPhase() {
     return PHASE_ORDER[experimentState.currentPhaseIdx];
   }
@@ -288,19 +389,26 @@
       return;
     }
 
+    const limitMs = trialTimeLimitMs(trial);
     const startTs = performance.now();
     experimentState.currentTrialState = {
       startTs: startTs,
-      deadlineTs: startTs + experimentState.timeLimitMs,
+      timeLimitMs: limitMs,                          // null in Practice
+      deadlineTs: limitMs ? startTs + limitMs : null,
       timerHandle: null,
       numAttempts: 0,
       numWrongAttempts: 0,
       lastAnswer: '',
-      hintReceived: false
+      hintReceived: false,
+      hintGlowSet: false,    // 60%-Schwelle: Glow + Sprechblase
+      hintEnforced: false    // 60%/90%-Schwelle ODER 3-Fehler: Forced-Hint-Mode
     };
 
     callbacks.clearFeedback();
     callbacks.resetInput();
+    // Speech-Bubble + Glow am Trial-Anfang immer zurücksetzen.
+    if (callbacks.setSpeechBubble) callbacks.setSpeechBubble(null);
+    if (callbacks.setHintGlow) callbacks.setHintGlow(false);
     // Skip-Button nur im Test-Modus zeigen.
     if (callbacks.setSkipVisible) callbacks.setSkipVisible(experimentState.testMode);
 
@@ -343,7 +451,13 @@
 
   function startTimer() {
     const ts = experimentState.currentTrialState;
+    const trial = currentTrial();
+    const trainingHint = isTrainingHintTrial(trial);
+    const glowAtMs    = ts.timeLimitMs * HINT_GLOW_AT_FRACTION;
+    const enforceAtMs = ts.timeLimitMs * HINT_ENFORCE_AT_FRACTION;
+
     const tick = () => {
+      const elapsed = performance.now() - ts.startTs;
       const remaining = ts.deadlineTs - performance.now();
       if (remaining <= 0) {
         if (callbacks.updateTimer) callbacks.updateTimer(0);
@@ -351,6 +465,18 @@
         return;
       }
       if (callbacks.updateTimer) callbacks.updateTimer(remaining);
+
+      // Hint-Suggestion + Enforcement nur in Training mit Hint-Bedingung.
+      if (trainingHint && !ts.hintReceived) {
+        if (!ts.hintGlowSet && elapsed >= glowAtMs) {
+          ts.hintGlowSet = true;
+          if (callbacks.setHintGlow) callbacks.setHintGlow(true);
+          if (callbacks.setSpeechBubble) callbacks.setSpeechBubble('Maybe you want to take a hint?');
+        }
+        if (!ts.hintEnforced && elapsed >= enforceAtMs) {
+          enforceHint();
+        }
+      }
     };
     tick(); // sofort einmal rendern, nicht erst nach 1 s
     ts.timerHandle = setInterval(tick, 250);
@@ -367,20 +493,44 @@
     // Lösungszeit messen — bei Hauptphasen auf das Zeitlimit deckeln, in
     // Practice nicht (dort gibt es keine harte Obergrenze).
     const elapsed = Math.round(performance.now() - trialState.startTs);
-    const solvingTimeMs = isPractice
+    const solvingTimeMs = (isPractice || !trialState.timeLimitMs)
       ? elapsed
-      : Math.min(elapsed, experimentState.timeLimitMs);
+      : Math.min(elapsed, trialState.timeLimitMs);
 
-    // Punkte: 100 fürs Lösen + linearer Zeitbonus, beides nur bei korrekt.
-    // Practice zählt nicht zur Gesamtsumme — Felder werden geloggt (0), aber
-    // nicht aufaddiert, damit der Score am Ende nur Baseline/Training/Test zeigt.
+    // Punkte:
+    //   completion = 100, nur bei korrekter Antwort in Hauptphasen.
+    //   time bonus = max(0, time_limit_seconds - solving_seconds) — skaliert
+    //                mit dem Phasen-Timer (Training 150, Baseline/Test 180).
+    //   penalty = 10 × Fehlversuche.
+    //   total = max(0, completion + bonus − penalty).
+    const phaseLimitS = trialState.timeLimitMs
+      ? Math.round(trialState.timeLimitMs / 1000)
+      : 0;
     const pointsCompletion = (isCorrect && !isPractice) ? COMPLETION_POINTS : 0;
     const pointsTimeBonus = (isCorrect && !isPractice)
-      ? Math.max(0, MAX_TIME_BONUS - Math.ceil(solvingTimeMs / 1000))
+      ? Math.max(0, phaseLimitS - Math.ceil(solvingTimeMs / 1000))
       : 0;
-    const pointsTotal = pointsCompletion + pointsTimeBonus;
-    if (!isPractice) experimentState.totalScore += pointsTotal;
-    if (callbacks.updateScore) callbacks.updateScore(experimentState.totalScore);
+    const wrongPenalty = (isCorrect && !isPractice)
+      ? WRONG_PENALTY * trialState.numWrongAttempts
+      : 0;
+    const pointsTotal = Math.max(0, pointsCompletion + pointsTimeBonus - wrongPenalty);
+
+    // Score-Pflege: gesamt + pro Phase. Practice zählt nicht.
+    if (!isPractice) {
+      experimentState.totalScore += pointsTotal;
+      const phase = trial.phase;
+      if (experimentState.scoresByPhase[phase] !== undefined) {
+        experimentState.scoresByPhase[phase] += pointsTotal;
+      }
+      experimentState.mainTrialsCompleted += 1;
+      if (callbacks.updateProgress) {
+        callbacks.updateProgress(
+          experimentState.mainTrialsCompleted,
+          experimentState.totalMainTrials
+        );
+      }
+    }
+    if (callbacks.updateScore) callbacks.updateScore(experimentState.totalScore, pointsTotal);
 
     const hintData = window.hints
       ? window.hints.getTrialHintData()
@@ -390,8 +540,15 @@
           time_to_first_hint_ms: '',
           hint_count: 0,
           hint_texts: '',
+          chat_history_json: '[]',
           llm_model: ''
         };
+
+    // Scratchpad-Inhalt: über Callback aus main.js, damit experiment.js
+    // weiter DOM-frei bleibt.
+    const scratchpadText = callbacks.getScratchpadText
+      ? (callbacks.getScratchpadText() || '')
+      : '';
 
     window.logger.logTrial({
       participant_id: experimentState.participantId,
@@ -419,6 +576,8 @@
       time_to_first_hint_ms: hintData.time_to_first_hint_ms,
       hint_count: hintData.hint_count,
       hint_texts: hintData.hint_texts,
+      chat_history_json: hintData.chat_history_json,
+      scratchpad_text: scratchpadText,
       llm_model: hintData.llm_model,
       timestamp: new Date().toISOString()
     });
@@ -453,6 +612,8 @@
       // Alle Phasen durch — erst Survey, dann End-Screen (passiert in main.js
       // nach Submit). Falls keine Survey-Callback gesetzt: direkt End-Screen.
       const summary = window.logger.getSummary();
+      summary.scoresByPhase = experimentState.scoresByPhase;
+      if (callbacks.setProgressVisible) callbacks.setProgressVisible(false);
       if (callbacks.showSurvey) {
         callbacks.showSurvey(summary);
       } else {
@@ -475,10 +636,18 @@
 
   /**
    * Wird aus main.js gerufen, sobald der Teilnehmer das Quiz bestanden hat.
-   * Setzt das Flag und startet die Baseline-Phase mit Intro.
+   * Setzt das Flag, blendet den Progress-Balken ein und startet die
+   * Baseline-Phase mit Intro.
    */
   function startMainFromInstructions() {
     experimentState.quizPassed = true;
+    if (callbacks.setProgressVisible) callbacks.setProgressVisible(true);
+    if (callbacks.updateProgress) {
+      callbacks.updateProgress(
+        experimentState.mainTrialsCompleted,
+        experimentState.totalMainTrials
+      );
+    }
     showPhaseIntro();
   }
 

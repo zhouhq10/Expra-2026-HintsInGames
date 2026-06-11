@@ -31,7 +31,7 @@
 
   // Korrekte Antworten für den Quiz — geändert werden? Hier eintragen.
   const QUIZ_ANSWERS = {
-    'quiz-q1': '2m30s',
+    'quiz-q1': 'correct_and_fast',
     'quiz-q2': 'next_zero',
     'quiz-q3': 'training'
   };
@@ -90,6 +90,11 @@
       setPracticeBanner:   setPracticeBanner,
       setInputEnabled:     setInputEnabled,
       setHintArrowVisible: setHintArrowVisible,
+      setHintGlow:         setHintGlow,
+      setSpeechBubble:     setSpeechBubble,
+      setProgressVisible:  setProgressVisible,
+      updateProgress:      updateProgress,
+      getScratchpadText:   getScratchpadText,
       resetInput:          resetTrialInput
     });
 
@@ -283,6 +288,9 @@
     el.textContent = message;
     el.classList.remove('is-correct', 'is-wrong');
     el.classList.add(kind === 'correct' ? 'is-correct' : 'is-wrong');
+    // Konfetti-Regen über dem Trial bei JEDER richtigen Antwort —
+    // auch in Practice, wo es keine Punkte gibt.
+    if (kind === 'correct') spawnConfetti(28);
   }
 
   function clearFeedback() {
@@ -334,8 +342,59 @@
     $('hint-arrow').hidden = !visible;
   }
 
-  function updateScore(totalScore) {
-    $('trial-score').textContent = `${totalScore} pts`;
+  function updateScore(totalScore, delta) {
+    const el = $('trial-score');
+    el.textContent = `${totalScore} pts`;
+    if (delta && delta > 0) {
+      // Score-Pulse-Animation neu antriggern (durch class-remove → reflow → add).
+      el.classList.remove('is-pulsing');
+      void el.offsetWidth;
+      el.classList.add('is-pulsing');
+      // Schwebendes "+N" über der Statusleiste.
+      showScoreFloat(delta);
+    }
+  }
+
+  function showScoreFloat(delta) {
+    const status = document.querySelector('.trial-status');
+    if (!status) return;
+    const float = document.createElement('span');
+    float.className = 'score-float';
+    float.textContent = `+${delta}`;
+    // Über der Score-Position rechts platzieren.
+    float.style.right = '5rem';
+    float.style.top = '0.4rem';
+    status.appendChild(float);
+    setTimeout(() => float.remove(), 1100);
+  }
+
+  function setHintGlow(active) {
+    const btn = $('hint-lightbulb-btn');
+    btn.classList.toggle('is-glowing', !!active);
+  }
+
+  function setSpeechBubble(text) {
+    const el = $('hint-speech-bubble');
+    if (text) {
+      el.textContent = text;
+      el.hidden = false;
+    } else {
+      el.textContent = '';
+      el.hidden = true;
+    }
+  }
+
+  function setProgressVisible(visible) {
+    $('progress-bar').hidden = !visible;
+  }
+
+  function updateProgress(done, total) {
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    $('progress-fill').style.width = `${pct}%`;
+  }
+
+  function getScratchpadText() {
+    return $('trial-notepad').value;
   }
 
   function setSkipVisible(visible) {
@@ -394,11 +453,13 @@
       ev.preventDefault();
 
       const misclickEl = document.querySelector('input[name="survey-misclick"]:checked');
+      const luckyEl = document.querySelector('input[name="survey-lucky-guess"]:checked');
       const backgroundEl = document.querySelector('input[name="survey-background"]:checked');
 
       const survey = {
         misclick:          misclickEl ? misclickEl.value : '',
-        strategy:          $('survey-strategy').value.trim(),
+        distraction:       $('survey-distraction').value.trim(),
+        lucky_guess:       luckyEl ? luckyEl.value : '',
         background:        backgroundEl ? backgroundEl.value : '',
         background_detail: $('survey-background-detail').value.trim()
       };
@@ -430,18 +491,70 @@
     const { participantId, condition } = window.experiment.getState();
     $('end-participant-id').textContent = participantId;
 
-    if (summary) {
-      const meanSec = Math.round((summary.mean_solving_time_ms || 0) / 1000);
-      $('end-score').textContent =
-        `Final score: ${summary.total_points} points  ·  ` +
-        `${summary.num_correct}/${summary.num_tasks} solved  ·  ` +
-        `avg ${meanSec}s per task`;
+    const scoreEl = $('end-score');
+    const total = summary ? Number(summary.total_points) || 0 : 0;
+    scoreEl.textContent = `Final score: 0 points`;
+
+    // Per-Phase-Aufschlüsselung unter dem Hauptscore.
+    const breakdownEl = document.getElementById('end-score-breakdown');
+    if (summary && summary.scoresByPhase && breakdownEl) {
+      const by = summary.scoresByPhase;
+      breakdownEl.innerHTML =
+        `<span>Baseline: <strong>${by.baseline || 0}</strong></span>` +
+        `<span>Training: <strong>${by.training || 0}</strong></span>` +
+        `<span>Test: <strong>${by.test || 0}</strong></span>`;
     }
+
+    showScreen('end');
+
+    // Score von 0 hochzählen (~1 s) und dezente Konfetti-Animation.
+    animateScoreCountUp(scoreEl, total, 1100);
+    spawnConfetti(28);
 
     // Daten automatisch auf dem Host-Laptop speichern (LAN-tauglich).
     saveResultsToHost(participantId, condition);
+  }
 
-    showScreen('end');
+  function animateScoreCountUp(el, target, durationMs) {
+    if (target <= 0) {
+      el.textContent = `Final score: 0 points`;
+      return;
+    }
+    const startTs = performance.now();
+    function step(ts) {
+      const t = Math.min(1, (ts - startTs) / durationMs);
+      // ease-out
+      const eased = 1 - Math.pow(1 - t, 3);
+      const value = Math.round(target * eased);
+      el.textContent = `Final score: ${value} points`;
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function spawnConfetti(count) {
+    const layer = document.createElement('div');
+    layer.className = 'confetti';
+    const palette = ['#5fa8d3', '#7bc97b', '#e07b7b', '#e8e8e8', '#a0a0a0'];
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement('span');
+      p.className = 'confetti-particle';
+      const left = (Math.random() * 100).toFixed(1) + 'vw';
+      const drift = (Math.random() * 200 - 100).toFixed(0) + 'px';
+      const rot = Math.round(Math.random() * 360);
+      const dur = 1700 + Math.round(Math.random() * 1600);
+      const delay = Math.round(Math.random() * 600);
+      p.style.left = left;
+      p.style.setProperty('--drift', drift);
+      p.style.setProperty('--rot', rot + 'deg');
+      p.style.setProperty('--dur', dur + 'ms');
+      p.style.setProperty('--delay', delay + 'ms');
+      p.style.background = palette[i % palette.length];
+      layer.appendChild(p);
+    }
+    document.body.appendChild(layer);
+    // Nach ~4 s wieder aufräumen.
+    setTimeout(() => layer.remove(), 4200);
   }
 
   /**

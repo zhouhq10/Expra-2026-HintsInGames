@@ -40,6 +40,8 @@
     'time_to_first_hint_ms',
     'hint_count',
     'hint_texts',
+    'chat_history_json',
+    'scratchpad_text',
     'llm_model',
     'timestamp'
   ];

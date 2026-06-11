@@ -169,8 +169,8 @@
     "id": "test_01",
     "phase": "test",
     "difficulty": 1,
-    "sequence": ["1", "2", "4", "7", "13", "24"],
-    "answer": 44,
+    "sequence": ["2", "3", "5", "10", "18", "33"],
+    "answer": 61,
     "rule": "Each term is the sum of the previous three terms (tribonacci-style).",
     "is_bottleneck": false
   },
@@ -178,8 +178,8 @@
     "id": "test_02",
     "phase": "test",
     "difficulty": 2,
-    "sequence": ["7", "49", "97", "130", "10"],
-    "answer": 1,
+    "sequence": ["8", "64", "52", "29", "85", "89"],
+    "answer": 145,
     "rule": "Each term is the sum of the squares of the digits of the previous term.",
     "is_bottleneck": false
   },
@@ -187,18 +187,18 @@
     "id": "test_03",
     "phase": "test",
     "difficulty": 3,
-    "sequence": ["12", "24", "17", "51", "45", "180"],
-    "answer": 175,
-    "rule": "Alternating operations whose magnitudes both shift: multiply by an increasing factor (x2, x3, x4, x5, ...), then subtract a decreasing amount (-7, -6, -5, -4, ...). The full sequence of operations is x2, -7, x3, -6, x4, -5, x5, -4, ...",
+    "sequence": ["452", "316", "673", "131", "227", "564"],
+    "answer": 745,
+    "rule": "In each digit position, the numbers 1 to 7 each appear exactly once.",
     "is_bottleneck": false
   },
   {
     "id": "test_04",
     "phase": "test",
     "difficulty": 4,
-    "sequence": ["2", "6", "18", "45", "99", "216"],
-    "answer": 441,
-    "rule": "Each term equals twice the previous term plus the digit sum of the previous term. So a(n) = 2 * a(n-1) + digit_sum(a(n-1)).",
+    "sequence": ["16", "32", "25", "75", "69", "276"],
+    "answer": 271,
+    "rule": "Alternating operations whose magnitudes both shift: multiply by an increasing factor (x2, x3, x4, x5, ...), then subtract a decreasing amount (-7, -6, -5, -4, ...). The full sequence of operations is x2, -7, x3, -6, x4, -5, x5, -4, ...",
     "is_bottleneck": false
   }
 ]

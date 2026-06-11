@@ -136,6 +136,20 @@
     resetPanel();
   }
 
+  /**
+   * Automatisch ausgelöster Hint — von experiment.js gerufen, wenn die
+   * 1:30-Schwelle in Training erreicht ist oder 3 Fehlversuche gemacht
+   * wurden. Öffnet das Hint-Panel und feuert sofort eine echte LLM-Anfrage.
+   * Verhält sich genauso, als hätte der Teilnehmer auf die Glühbirne geklickt
+   * — Trigger im CSV ist aber `auto` statt `manual`.
+   */
+  function autoTriggerHint() {
+    if (!isHintAvailable()) return;
+    if (hintCount > 0 || inFlight) return; // schon ein Hint da
+    openPanel();
+    requestHint(/* userMessage */ null, 'auto');
+  }
+
   function getTrialHintData() {
     return {
       hint_used: hintCount > 0,
@@ -145,6 +159,9 @@
       hint_count: hintCount,
       // Hints mit `||` joinen — CSV-Logger quotet automatisch wegen Komma.
       hint_texts: hintTexts.join(' || '),
+      // Vollständige Konversation als JSON für die Analyse — beinhaltet
+      // User-Rückfragen und Assistant-Antworten (Mock + LLM).
+      chat_history_json: JSON.stringify(conversation),
       llm_model: llmModel
     };
   }
@@ -360,5 +377,5 @@
     }
   }
 
-  window.hints = { init, onTrialStart, onTrialEnd, getTrialHintData };
+  window.hints = { init, onTrialStart, onTrialEnd, getTrialHintData, autoTriggerHint };
 })();

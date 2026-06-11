@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Persistent progress bar across the main experiment phases. Hidden
+       during consent / welcome / practice / survey / end. -->
+  <div id="progress-bar" class="progress-bar" hidden aria-label="Experiment progress">
+    <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+  </div>
+
   <main class="container">
 
     <!-- Consent: very first screen the participant sees. -->
@@ -90,15 +96,16 @@
     <section id="screen-instructions" class="screen" hidden>
       <h2>Quick recap before you start</h2>
       <ul class="instructions-list">
-        <li><strong>4 baseline tasks</strong> (no hints) — get a feel for your starting level.</li>
-        <li><strong>6 training tasks</strong> (hint available) — try the lightbulb if you're stuck.</li>
-        <li><strong>4 test tasks</strong> (no hints) — same items as baseline, to measure improvement.</li>
+        <li><strong>4 baseline tasks</strong> (no hints) — get a feel for your starting level. <strong>2:30</strong> per task.</li>
+        <li><strong>6 training tasks</strong> — <strong>3:00</strong> per task (a little extra time so you can read the hint). In this phase you can request a hint from an <strong>AI helper (LLM)</strong> whenever you're stuck.</li>
+        <li><strong>4 test tasks</strong> (no hints) — different items that follow the same kinds of patterns as the baseline. <strong>2:30</strong> per task.</li>
       </ul>
       <p>
-        Every task has a <strong>2:30 timer</strong>. If time runs out, you get
-        <strong>0 points</strong> for that task and the next one begins
-        automatically. A correct answer scores
+        If time runs out, you get <strong>0 points</strong> for that task and
+        the next one begins automatically. A correct answer scores
         <strong>100 points + a time bonus</strong> (faster = more bonus).
+        Every wrong submission costs <strong>10 points</strong>, and after
+        <strong>5 wrong attempts</strong> the task is skipped.
       </p>
       <p>
         Press Continue when you're ready for a 3-question check that you've
@@ -117,11 +124,11 @@
 
       <form id="quiz-form" class="quiz-form">
         <fieldset class="quiz-fieldset">
-          <legend>1. How long do you have for each task?</legend>
-          <label><input type="radio" name="quiz-q1" value="30s" /> <span>30 seconds</span></label>
-          <label><input type="radio" name="quiz-q1" value="2m30s" /> <span>2 minutes 30 seconds</span></label>
-          <label><input type="radio" name="quiz-q1" value="5min" /> <span>5 minutes</span></label>
-          <label><input type="radio" name="quiz-q1" value="no_limit" /> <span>No time limit</span></label>
+          <legend>1. What is the goal of the tasks?</legend>
+          <label><input type="radio" name="quiz-q1" value="correct_and_fast" /> <span>Answer the continuation of the sequences <strong>correctly AND quickly</strong>.</span></label>
+          <label><input type="radio" name="quiz-q1" value="fast_only" /> <span>Answer as fast as possible, even if my answer is wrong.</span></label>
+          <label><input type="radio" name="quiz-q1" value="correct_only" /> <span>Answer correctly, no matter how long it takes.</span></label>
+          <label><input type="radio" name="quiz-q1" value="discover" /> <span>Discover as many different sequence patterns as possible.</span></label>
         </fieldset>
 
         <fieldset class="quiz-fieldset">
@@ -177,6 +184,12 @@
            practice trials. Hidden on every other trial. -->
       <div id="hint-arrow" class="hint-arrow" hidden aria-hidden="true">
         <span class="hint-arrow-label">Click the hint here →</span>
+      </div>
+
+      <!-- Soft speech bubble shown during training trials after ~60 s of
+           no correct answer: "Maybe you want to take a hint?". -->
+      <div id="hint-speech-bubble" class="hint-speech-bubble" hidden>
+        Maybe you want to take a hint?
       </div>
 
       <!-- Status bar: phase/task counter, countdown timer, running score. -->
@@ -290,12 +303,28 @@
         </fieldset>
 
         <fieldset class="survey-fieldset">
-          <legend>Did you follow a particular strategy when looking for the next number? If so, describe it briefly.</legend>
+          <legend>Did anything distract you while doing the experiment?</legend>
           <textarea
-            id="survey-strategy"
+            id="survey-distraction"
             rows="4"
-            placeholder="e.g. I first looked at the differences between numbers, then I tried multiplication…"
+            placeholder="e.g. background noise, a notification on my phone, my own thoughts…"
           ></textarea>
+        </fieldset>
+
+        <fieldset class="survey-fieldset">
+          <legend>Did you accidentally submit a correct answer at any point (a "lucky guess")?</legend>
+          <label>
+            <input type="radio" name="survey-lucky-guess" value="no" checked />
+            <span>No — every correct answer was intentional</span>
+          </label>
+          <label>
+            <input type="radio" name="survey-lucky-guess" value="yes" />
+            <span>Yes, at least once</span>
+          </label>
+          <label>
+            <input type="radio" name="survey-lucky-guess" value="unsure" />
+            <span>I'm not sure</span>
+          </label>
         </fieldset>
 
         <fieldset class="survey-fieldset">
@@ -327,6 +356,7 @@
     <section id="screen-end" class="screen" hidden>
       <h2>Thank you for participating!</h2>
       <p id="end-score" class="end-score"></p>
+      <div id="end-score-breakdown" class="end-score-breakdown"></div>
       <p>
         The experiment is complete. Your data has been saved automatically.
         You can also download a copy below.
