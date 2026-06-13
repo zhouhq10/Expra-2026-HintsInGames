@@ -272,7 +272,11 @@
     try {
       const resp = await fetch('/api/hint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // Token-Gate-Header kommen aus main.js (window.apiHeaders); Fallback
+        // ohne Token für lokale Entwicklung.
+        headers: (typeof window.apiHeaders === 'function')
+          ? window.apiHeaders()
+          : { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           condition,
           trial: {

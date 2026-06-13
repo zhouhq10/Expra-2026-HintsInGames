@@ -23,12 +23,14 @@ Architektur:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import socket
 import sys
 import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -36,7 +38,7 @@ from typing import Literal
 import openai
 from openai import OpenAI
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -64,6 +66,17 @@ RESULTS_DIR = ROOT / "data" / "results"
 
 API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
+
+# Optionales Zugangstoken. Sobald gesetzt, müssen /api/hint und /api/results
+# es im Header `X-Access-Token` mitschicken — verhindert, dass Fremde den
+# öffentlich erreichbaren Proxy aufrufen und OpenAI-Kosten verursachen.
+# Leer => kein Check (für lokale Entwicklung im vertrauten Netz).
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "").strip()
+
+# Optionaler Webhook (z.B. Google-Apps-Script-Web-App). Wenn gesetzt, schickt
+# der Server jede fertige Ergebnis-CSV zusätzlich dorthin. Nötig im Cloud-
+# Hosting, wo die lokale Platte ephemer ist (Restart/Sleep löscht sie).
+RESULTS_WEBHOOK_URL = os.environ.get("RESULTS_WEBHOOK_URL", "").strip()
 
 
 def _key_looks_unset(value: str) -> bool:
@@ -174,9 +187,22 @@ async def add_no_cache_headers(request: Request, call_next):
     return response
 
 
+def require_token(provided: str | None) -> None:
+    """Wirft 401, wenn ACCESS_TOKEN gesetzt ist und nicht (exakt) passt."""
+    if not ACCESS_TOKEN:
+        return  # kein Token konfiguriert -> offener Zugang (lokal)
+    if (provided or "").strip() != ACCESS_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid or missing access token.")
+
+
 @app.post("/api/hint", response_model=HintResponse)
-def post_hint(req: HintRequest) -> HintResponse:
+def post_hint(
+    req: HintRequest,
+    x_access_token: str | None = Header(default=None),
+) -> HintResponse:
     """Generiert einen Hint des angefragten Typs für den aktuellen Trial."""
+
+    require_token(x_access_token)
 
     try:
         client = get_client()
@@ -259,24 +285,70 @@ def _sanitize_filename(value: str, fallback: str) -> str:
     return cleaned or fallback
 
 
+def _forward_to_webhook(filename: str, req: ResultsRequest) -> None:
+    """Schickt die CSV an RESULTS_WEBHOOK_URL (z.B. Google Apps Script).
+
+    Best-effort: Fehler werden nur geloggt, nicht an den Teilnehmer
+    durchgereicht — der Browser-Download bleibt als Fallback.
+    """
+    if not RESULTS_WEBHOOK_URL:
+        return
+    payload = json.dumps(
+        {
+            "filename": filename,
+            "participant_id": req.participant_id,
+            "condition": req.condition,
+            "csv": req.csv,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        RESULTS_WEBHOOK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as resp:
+            resp.read()  # Antwort verwerfen; Status reicht.
+        log.info("results forwarded to webhook file=%s", filename)
+    except Exception as err:  # noqa: BLE001 - bewusst breit, Best-effort
+        log.error("Could not forward results to webhook: %s", err)
+
+
 @app.post("/api/results", response_model=ResultsResponse)
-def post_results(req: ResultsRequest) -> ResultsResponse:
-    """Speichert die übermittelte CSV serverseitig auf dem Host-Rechner."""
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+def post_results(
+    req: ResultsRequest,
+    x_access_token: str | None = Header(default=None),
+) -> ResultsResponse:
+    """Speichert die CSV: lokal (best-effort) + optional an einen Webhook.
+
+    Im Cloud-Hosting ist die lokale Platte ephemer — dort sorgt der Webhook
+    (RESULTS_WEBHOOK_URL) für die eigentliche Persistenz.
+    """
+    require_token(x_access_token)
 
     safe_id = _sanitize_filename(req.participant_id, "anon")
     safe_cond = _sanitize_filename(req.condition, "unknown")
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     filename = f"experiment_{safe_id}_{safe_cond}_{ts}.csv"
-    path = RESULTS_DIR / filename
 
+    # Lokale Kopie (best-effort) — funktioniert lokal, schadet in der Cloud nicht.
+    wrote_local = False
     try:
-        path.write_text(req.csv, encoding="utf-8")
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        (RESULTS_DIR / filename).write_text(req.csv, encoding="utf-8")
+        wrote_local = True
     except OSError as err:
-        log.error("Could not write results file %s: %s", path, err)
+        log.warning("Could not write local results file %s: %s", filename, err)
+
+    # Cloud-Persistenz via Webhook (falls konfiguriert).
+    _forward_to_webhook(filename, req)
+
+    # Nur hart fehlschlagen, wenn weder lokal gespeichert noch ein Webhook da ist.
+    if not wrote_local and not RESULTS_WEBHOOK_URL:
         raise HTTPException(
             status_code=500, detail="Could not save results on the host."
-        ) from err
+        )
 
     log.info("results saved participant=%s condition=%s file=%s", safe_id, safe_cond, filename)
     return ResultsResponse(saved_as=filename)

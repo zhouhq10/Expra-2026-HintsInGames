@@ -1,0 +1,24 @@
+# Render Blueprint — deploys the experiment as a single web service.
+# The FastAPI app in docs/server.py serves the page, proxies LLM hints
+# (keeping the OpenAI key server-side), and saves results.
+#
+# Setup: on render.com -> New -> Blueprint -> pick this repo. Render reads
+# this file, then asks you to fill the secret env vars marked `sync: false`.
+# server.py already binds to $PORT and 0.0.0.0, so no extra config is needed.
+services:
+  - type: web
+    name: expra-hints-experiment
+    runtime: python
+    rootDir: docs
+    plan: free                       # free tier sleeps after ~15 min idle
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: OPENAI_API_KEY          # paste in the Render dashboard (secret)
+        sync: false
+      - key: ACCESS_TOKEN            # gate the public proxy; goes in participant URL as ?key=
+        sync: false
+      - key: RESULTS_WEBHOOK_URL     # Google Apps Script URL for result CSVs
+        sync: false
+      - key: LLM_MODEL
+        value: gpt-4o-mini

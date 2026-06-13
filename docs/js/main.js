@@ -116,6 +116,28 @@
    * Versuchspersonen-ID: bevorzugt aus ?id=... in der URL, sonst random.
    * Random-Format: p_XXXXXX, ohne verwechselbare Zeichen (kein 0/O/1/I).
    */
+  /**
+   * Zugangstoken aus `?key=...` in der URL. Gatet den serverseitigen
+   * LLM-Proxy gegen fremde Aufrufe (siehe ACCESS_TOKEN in server.py).
+   * Es ist NICHT der OpenAI-Key — nur ein simples Zugangs-Gate, das den
+   * Teilnehmern ohnehin über die Studien-URL bekannt ist.
+   */
+  function resolveAccessToken() {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('key') || '').trim();
+  }
+
+  /** Header-Objekt für API-Requests inkl. optionalem Zugangstoken. */
+  function apiHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = resolveAccessToken();
+    if (token) headers['X-Access-Token'] = token;
+    return headers;
+  }
+
+  // Für hints.js (eigene IIFE) erreichbar machen — gleiches Token-Gate.
+  window.apiHeaders = apiHeaders;
+
   function resolveParticipantId() {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = (params.get('id') || '').trim();
@@ -566,7 +588,7 @@
     try {
       const resp = await fetch('/api/results', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders(),
         body: JSON.stringify({
           participant_id: participantId,
           condition: condition,
