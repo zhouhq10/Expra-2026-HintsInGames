@@ -304,7 +304,12 @@ def _forward_to_webhook(filename: str, req: ResultsRequest) -> None:
     request = urllib.request.Request(
         RESULTS_WEBHOOK_URL,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Google blockt den Default-User-Agent von urllib ("Python-urllib")
+            # mit 403. Ein browser-/curl-artiger UA wird durchgelassen.
+            "User-Agent": "Mozilla/5.0 (compatible; ExpraHintsServer/1.0)",
+        },
         method="POST",
     )
     try:

@@ -591,9 +591,15 @@
 
   function advanceTrial() {
     stopTimer(); // doppelt hält besser — kein verwaister Interval
-    experimentState.currentTrialIdx += 1;
 
+    // Schutz gegen Doppel-Advance: ein verwaister setTimeout(advanceTrial)
+    // (z.B. aus dem 5-Fehlversuche- oder Timeout-Pfad) kann feuern, nachdem
+    // das Experiment bereits die letzte Phase verlassen hat. Dann gäbe es
+    // keine aktuelle Phase mehr -> früher Absturz bei sequences[phase].length.
     const phase = currentPhase();
+    if (!phase || !experimentState.sequences[phase]) return;
+
+    experimentState.currentTrialIdx += 1;
     const remaining = experimentState.sequences[phase].length;
 
     if (experimentState.currentTrialIdx < remaining) {
