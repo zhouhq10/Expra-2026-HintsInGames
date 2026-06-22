@@ -13,6 +13,20 @@
   --border: #3a3a3a;
 }
 
+/* Light theme — alle Variablen umgemappt. Kein einziger anderer Selektor
+ * muss angefasst werden, weil das ganze Stylesheet über die CSS-Vars läuft. */
+body[data-theme="light"] {
+  --bg: #f6f7f9;
+  --bg-elevated: #ffffff;
+  --fg: #1a1a1a;
+  --fg-muted: #5a5a5a;
+  --accent: #2c7fb8;
+  --accent-hover: #1f6da3;
+  --error: #c53030;
+  --success: #2f855a;
+  --border: #d8dbe0;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -52,6 +66,39 @@ body {
   width: 0%;
   background: var(--accent);
   transition: width 350ms ease;
+}
+
+/* ---------- Theme toggle (top-left, always visible) -------------- */
+
+.theme-toggle {
+  position: fixed;
+  top: 0.9rem;
+  left: 0.9rem;
+  z-index: 250;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--fg-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.theme-toggle-icon {
+  display: inline-block;
+  line-height: 1;
 }
 
 /* Container = Vollbild, ein Screen = ein Vollbild-Flex-Container.

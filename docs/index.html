@@ -13,6 +13,17 @@
     <div id="progress-fill" class="progress-fill" style="width:0%"></div>
   </div>
 
+  <!-- Theme toggle (dark / light). Always visible, persists in localStorage. -->
+  <button
+    id="theme-toggle"
+    class="theme-toggle"
+    type="button"
+    aria-label="Toggle dark / light mode"
+    title="Toggle dark / light mode"
+  >
+    <span class="theme-toggle-icon" aria-hidden="true">☾</span>
+  </button>
+
   <main class="container">
 
     <!-- Consent: very first screen the participant sees. -->
@@ -20,7 +31,7 @@
       <h1>Number Sequence Experiment</h1>
       <p>
         You'll see sequences of numbers and try to figure out the missing one.
-        The study takes about 20 minutes and is a course project at
+        The study takes about 40 minutes and is a course project at
         TU Darmstadt — Cognitive Science.
       </p>
       <p>
@@ -29,59 +40,11 @@
         You can stop at any time by closing the browser tab.
       </p>
       <p>
-        If you have questions, contact <strong>[experimenter contact]</strong>.
+        If you have questions, contact <strong>Hanqi Zhou</strong>.
       </p>
       <button id="consent-btn" class="primary">
         I consent to participate and want to start
       </button>
-    </section>
-
-    <!-- Welcome screen: short instruction + group picker + start -->
-    <section id="screen-welcome" class="screen" hidden>
-      <h1>Number Sequence Experiment</h1>
-      <p>
-        In this study you will see several number sequences.
-        Your task is to determine the next number in each one.
-      </p>
-      <p>
-        The experiment has three phases with 25 tasks in total.
-        Each task has a 2:30 time limit, and you score points for solving
-        correctly and quickly.
-      </p>
-
-      <fieldset class="condition-picker">
-        <legend>Hint group (test mode)</legend>
-        <label>
-          <input type="radio" name="welcome-condition" value="random" checked />
-          <span><strong>Random</strong> — group will be assigned automatically</span>
-        </label>
-        <label>
-          <input type="radio" name="welcome-condition" value="direct" />
-          <span><strong>Direct</strong> — LLM names the concrete operation</span>
-        </label>
-        <label>
-          <input type="radio" name="welcome-condition" value="strategy" />
-          <span><strong>Strategy</strong> — LLM explains the principle</span>
-        </label>
-        <label>
-          <input type="radio" name="welcome-condition" value="reflective" />
-          <span><strong>Reflective</strong> — LLM asks a question</span>
-        </label>
-        <label>
-          <input type="radio" name="welcome-condition" value="control" />
-          <span><strong>Control</strong> — no hints available</span>
-        </label>
-      </fieldset>
-
-      <label class="test-mode-toggle">
-        <input type="checkbox" id="welcome-test-mode" />
-        <span>
-          <strong>Test mode</strong> — show a skip button on every task
-          (for development; runs are flagged in the CSV)
-        </span>
-      </label>
-
-      <button id="welcome-start-btn" class="primary">Start experiment</button>
     </section>
 
     <!-- Phase intro: before each phase -->
@@ -97,15 +60,18 @@
       <h2>Quick recap before you start</h2>
       <ul class="instructions-list">
         <li><strong>4 baseline tasks</strong> (no hints) — get a feel for your starting level. <strong>2:30</strong> per task.</li>
-        <li><strong>6 training tasks</strong> — <strong>3:00</strong> per task (a little extra time so you can read the hint). In this phase you can request a hint from an <strong>AI helper (LLM)</strong> whenever you're stuck.</li>
-        <li><strong>4 test tasks</strong> (no hints) — different items that follow the same kinds of patterns as the baseline. <strong>2:30</strong> per task.</li>
+        <li><strong>6 training tasks</strong> — <strong>3:00</strong> per task (a little extra time so you can read the hint). In this phase you can request a hint from an <strong>AI helper (LLM)</strong> whenever you're stuck. You can also ask <strong>follow-up questions</strong> to the helper.</li>
+        <li><strong>4 test tasks</strong> (no hints) — different items that follow the same kinds of patterns as before. <strong>2:30</strong> per task.</li>
       </ul>
       <p>
-        If time runs out, you get <strong>0 points</strong> for that task and
-        the next one begins automatically. A correct answer scores
+        Type your answer into the input box and <strong>press Enter</strong> to
+        submit. If time runs out, you get <strong>0 points</strong> for that
+        task and the next one begins automatically. A correct answer scores
         <strong>100 points + a time bonus</strong> (faster = more bonus).
         Every wrong submission costs <strong>10 points</strong>, and after
         <strong>5 wrong attempts</strong> the task is skipped.
+        <strong>Using a hint does NOT cost any points</strong> — feel free to
+        ask the helper if you're stuck.
       </p>
       <p>
         Press Continue when you're ready for a 3-question check that you've
@@ -208,7 +174,7 @@
 
       <form id="trial-form" class="answer-form" autocomplete="off">
         <label for="trial-answer-input" class="answer-label">
-          Your answer
+          Your answer — press Enter to submit
         </label>
         <input
           id="trial-answer-input"
@@ -287,44 +253,12 @@
 
       <form id="survey-form" class="survey-form">
         <fieldset class="survey-fieldset">
-          <legend>Did you accidentally submit a wrong answer at any point (a "misclick")?</legend>
-          <label>
-            <input type="radio" name="survey-misclick" value="no" checked />
-            <span>No — all of my answers were intentional</span>
-          </label>
-          <label>
-            <input type="radio" name="survey-misclick" value="yes" />
-            <span>Yes, at least once</span>
-          </label>
-          <label>
-            <input type="radio" name="survey-misclick" value="unsure" />
-            <span>I'm not sure</span>
-          </label>
-        </fieldset>
-
-        <fieldset class="survey-fieldset">
           <legend>Did anything distract you while doing the experiment?</legend>
           <textarea
             id="survey-distraction"
             rows="4"
             placeholder="e.g. background noise, a notification on my phone, my own thoughts…"
           ></textarea>
-        </fieldset>
-
-        <fieldset class="survey-fieldset">
-          <legend>Did you accidentally submit a correct answer at any point (a "lucky guess")?</legend>
-          <label>
-            <input type="radio" name="survey-lucky-guess" value="no" checked />
-            <span>No — every correct answer was intentional</span>
-          </label>
-          <label>
-            <input type="radio" name="survey-lucky-guess" value="yes" />
-            <span>Yes, at least once</span>
-          </label>
-          <label>
-            <input type="radio" name="survey-lucky-guess" value="unsure" />
-            <span>I'm not sure</span>
-          </label>
         </fieldset>
 
         <fieldset class="survey-fieldset">

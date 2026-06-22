@@ -43,6 +43,36 @@
   // Beim DOMContentLoaded los.
   document.addEventListener('DOMContentLoaded', boot);
 
+  // Theme-Init synchron beim Laden — Scripts stehen am Body-Ende, also ist
+  // der Body schon da. Direktes setAttribute verhindert das hell-/dunkel-
+  // Flackern, das ein DOMContentLoaded-Handler verursachen würde.
+  initTheme();
+
+  function initTheme() {
+    let theme = 'dark';
+    try {
+      const saved = localStorage.getItem('hig-theme');
+      if (saved === 'light' || saved === 'dark') theme = saved;
+    } catch (_) { /* localStorage gesperrt — ignorieren */ }
+    applyTheme(theme);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const current = document.body.getAttribute('data-theme') || 'dark';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
+      });
+    }
+  }
+
+  function applyTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+    try { localStorage.setItem('hig-theme', theme); } catch (_) { /* ignore */ }
+    const icon = document.querySelector('#theme-toggle .theme-toggle-icon');
+    // Wir zeigen das Symbol, zu dem geklickt würde: im Dark-Mode die Sonne
+    // (→ Light), im Light-Mode den Mond (→ Dark).
+    if (icon) icon.textContent = theme === 'light' ? '☾' : '☀';
+  }
+
   async function boot() {
     const urlInfo = resolveUrlCondition();
     const participantId = resolveParticipantId();
@@ -63,8 +93,8 @@
       return;
     }
 
-    bindConsentScreen();
-    bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs });
+    const testMode = resolveTestMode();
+    bindConsentScreen({ participantId, urlInfo, sequences, timeLimitMs, testMode });
     bindTrialScreen();
     bindPhaseIntroScreen();
     bindInstructionsScreen();
@@ -72,8 +102,8 @@
     bindSurveyScreen();
     bindEndScreen();
 
-    // hints.init wird beim Klick auf "Experiment starten" aufgerufen,
-    // weil wir die endgültige Condition erst dann kennen (Radio-Button).
+    // hints.init wird beim Klick auf den Consent-Button aufgerufen, sobald
+    // die Condition vom Server (oder URL-Param) bekannt ist.
 
     // Engine bekommt UI-Callbacks — der Engine-Code selbst kennt kein DOM.
     window.experiment.setCallbacks({
@@ -104,10 +134,69 @@
 
   // ---------- Consent ---------------------------------------------------
 
-  function bindConsentScreen() {
-    $('consent-btn').addEventListener('click', () => {
-      showScreen('welcome');
+  function bindConsentScreen({ participantId, urlInfo, sequences, timeLimitMs, testMode }) {
+    const btn = $('consent-btn');
+    let starting = false;
+    btn.addEventListener('click', async () => {
+      if (starting) return;
+      starting = true;
+      // Fullscreen-API darf nur in einem User-Gesture-Handler aufgerufen werden.
+      requestFullscreen();
+
+      // Condition holen: URL-Param > Server-Round-Robin > Random-Fallback.
+      const { condition, conditionAssigned } = await resolveCondition(urlInfo);
+
+      window.hints.init(condition, {
+        lightbulbBtn:    $('hint-lightbulb-btn'),
+        panelEl:         $('hint-panel'),
+        closeBtn:        $('hint-close-btn'),
+        messagesEl:      $('hint-messages'),
+        followupForm:    $('hint-followup-form'),
+        followupInput:   $('hint-followup-input'),
+        errorEl:         $('hint-error'),
+        // hints.js feuert das hier nach dem ersten Hint pro Trial — wir
+        // reichen das weiter an die Engine, damit sie Pfeil + Input-Lock
+        // aufhebt (relevant für forced-hint Practice-Trials).
+        onHintDelivered: () => window.experiment.onHintReceived()
+      });
+
+      window.experiment.init({
+        participantId,
+        condition,
+        conditionAssigned,
+        sequences,
+        timeLimitMs,
+        testMode
+      });
+      window.experiment.start();
     });
+  }
+
+  /**
+   * Liefert Hint-Bedingung + woher sie kommt.
+   *   1) `?condition=...` aus der URL gewinnt immer.
+   *   2) Sonst fragt das Frontend `/api/condition` — der Server zählt im
+   *      Round-Robin durch (direct → strategy → reflective → control → …).
+   *   3) Wenn der Server nicht erreichbar ist (z. B. statisches Hosting),
+   *      Fallback auf eine zufällige Auswahl.
+   */
+  async function resolveCondition(urlInfo) {
+    if (urlInfo && urlInfo.value) {
+      return { condition: urlInfo.value, conditionAssigned: 'url' };
+    }
+    try {
+      const resp = await fetch('/api/condition');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && VALID_CONDITIONS.includes(data.condition)) {
+          return { condition: data.condition, conditionAssigned: 'auto' };
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch condition from server, falling back to random:', err);
+    }
+    const cond = VALID_CONDITIONS[Math.floor(Math.random() * VALID_CONDITIONS.length)];
+    return { condition: cond, conditionAssigned: 'random' };
   }
 
   // ---------- URL / Condition / Participant-ID --------------------------
@@ -152,6 +241,15 @@
   }
 
   /**
+   * `?testmode=1` aktiviert den Skip-Button auf jedem Trial. Praktisch zum
+   * Durchklicken — wird im CSV als `test_mode=true` markiert.
+   */
+  function resolveTestMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('testmode') === '1';
+  }
+
+  /**
    * Test-Modus: `?timelimit=<Sekunden>` überschreibt das 2:30-Limit pro Aufgabe
    * (z.B. `?timelimit=40`), um Durchläufe schneller zu testen.
    * Ohne Parameter gilt der Default (150 s).
@@ -184,71 +282,6 @@
       console.warn(`Unbekannte Condition '${raw}', ignoriere URL-Parameter.`);
     }
     return { value: null, present: false };
-  }
-
-  /**
-   * Liest die aktuelle Condition-Auswahl im Welcome-Screen-Radio-Picker.
-   * Gibt Endwert + Quell-Info zurück (für CSV-Logging).
-   */
-  function readSelectedCondition(urlInfo) {
-    const selected = document.querySelector('input[name="welcome-condition"]:checked');
-    const choice = selected ? selected.value : 'random';
-
-    if (choice === 'random') {
-      const cond = VALID_CONDITIONS[Math.floor(Math.random() * VALID_CONDITIONS.length)];
-      return { condition: cond, conditionAssigned: 'random' };
-    }
-    // Konkrete Auswahl: 'url' wenn der Wert vom URL-Parameter kam und
-    // unverändert blieb; sonst 'manual' (per Welcome-Screen ausgewählt).
-    const assigned = (urlInfo.present && urlInfo.value === choice) ? 'url' : 'manual';
-    return { condition: choice, conditionAssigned: assigned };
-  }
-
-  // ---------- Welcome ---------------------------------------------------
-
-  function bindWelcomeScreen({ participantId, urlInfo, sequences, timeLimitMs }) {
-    // URL-Parameter setzt den Default-Radio (falls gültig).
-    if (urlInfo.value) {
-      const radio = document.querySelector(
-        `input[name="welcome-condition"][value="${urlInfo.value}"]`
-      );
-      if (radio) radio.checked = true;
-    }
-
-    $('welcome-start-btn').addEventListener('click', () => {
-      // Fullscreen-API darf nur in einem User-Gesture-Handler aufgerufen werden.
-      requestFullscreen();
-
-      const { condition, conditionAssigned } = readSelectedCondition(urlInfo);
-
-      // Hints-Modul jetzt initialisieren — wir kennen erst hier die
-      // endgültige Condition.
-      window.hints.init(condition, {
-        lightbulbBtn:    $('hint-lightbulb-btn'),
-        panelEl:         $('hint-panel'),
-        closeBtn:        $('hint-close-btn'),
-        messagesEl:      $('hint-messages'),
-        followupForm:    $('hint-followup-form'),
-        followupInput:   $('hint-followup-input'),
-        errorEl:         $('hint-error'),
-        // hints.js feuert das hier nach dem ersten Hint pro Trial — wir
-        // reichen das weiter an die Engine, damit sie Pfeil + Input-Lock
-        // aufhebt (relevant für forced-hint Practice-Trials).
-        onHintDelivered: () => window.experiment.onHintReceived()
-      });
-
-      const testMode = $('welcome-test-mode').checked;
-
-      window.experiment.init({
-        participantId,
-        condition,
-        conditionAssigned,
-        sequences,
-        timeLimitMs,
-        testMode
-      });
-      window.experiment.start();
-    });
   }
 
   function requestFullscreen() {
@@ -474,14 +507,10 @@
     $('survey-form').addEventListener('submit', (ev) => {
       ev.preventDefault();
 
-      const misclickEl = document.querySelector('input[name="survey-misclick"]:checked');
-      const luckyEl = document.querySelector('input[name="survey-lucky-guess"]:checked');
       const backgroundEl = document.querySelector('input[name="survey-background"]:checked');
 
       const survey = {
-        misclick:          misclickEl ? misclickEl.value : '',
         distraction:       $('survey-distraction').value.trim(),
-        lucky_guess:       luckyEl ? luckyEl.value : '',
         background:        backgroundEl ? backgroundEl.value : '',
         background_detail: $('survey-background-detail').value.trim()
       };

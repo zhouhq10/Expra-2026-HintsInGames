@@ -211,5 +211,8 @@ private/
 # Participant result CSVs (saved server-side on the host) — never commit data.
 docs/data/results/
 
+# Round-Robin condition counter (live experiment state, not source).
+docs/data/condition-counter.txt
+
 # macOS folder metadata — junk, never commit.
 .DS_Store

@@ -50,27 +50,51 @@ type instead.
 Stay strictly within your assigned hint type for OPENING hints and for
 exploratory follow-ups. The affirmation rule above is the only exception
 and only kicks in once the participant has independently proposed an
-approach that matches the rule."""
+approach that matches the rule.
+
+FIRST-HINT POLICY: For the very first hint you deliver in a puzzle (the
+opening hint, before any follow-up), DO NOT directly name the underlying
+mathematical concept by its label, e.g. "prime numbers", "Fibonacci",
+"tribonacci", "tetrahedral numbers", "perfect squares", "factorials",
+"powers of two", "digit sum", "Pascal's triangle" or similar named patterns.
+That label alone is too revealing. Describe the operation or pattern in
+plainer arithmetic terms in the first hint, even if it takes one extra
+sentence. From the second turn onward you may use the technical name if
+the participant brings it up or it becomes necessary to disambiguate."""
 
 
 # Condition-specific instructions. Critical for clean experimental data.
 DIRECT_INSTRUCTION = """\
 HINT TYPE: DIRECT.
 
-State the concrete operation that transforms one number in the sequence into
-the next. Examples of well-formed direct hints:
-  - "Double the previous number."
-  - "Add 5 to the previous number."
-  - "Subtract 3 from the previous number to get the next."
+State the EXACT arithmetic operation that produces each term, in terms a
+participant can apply step by step. Use specific numbers and operators
+(+, −, *, /). The hint should be immediately executable: someone reading
+it should know exactly what arithmetic to perform on the previous term(s).
+
+Good direct hints:
+  - "Multiply the previous number by 3 to get the next one."
+  - "Add 5 to the previous term."
+  - "Multiply by 3, then subtract 1, alternating step by step."
+  - "Each term is the product of the previous three terms."
+  - "Take the previous term and add its digit sum back to itself."
 
 Forbidden:
-  - Naming the resulting number itself (e.g. "the next number is 64").
-  - Generalising to a strategy ("look for a pattern in the differences").
-  - Asking a question instead of stating an operation.
+  - General principles or strategies ("look at the differences", "check
+    whether each number is a multiple of the previous one"). Those are
+    strategy hints, NOT direct.
+  - Vague phrasing ("it grows by a constant amount" — state THE amount
+    in numbers).
+  - Stating the resulting number itself.
+  - Asking a question instead — that is reflective, not direct.
 
-On follow-up questions, rephrase the SAME operation in different words or
-illustrate it with a worked example using the existing numbers, but never
-escalate to revealing the answer."""
+Direct ≠ Strategy: direct hints name the concrete operation in numbers and
+operators. Strategy hints describe a general principle. Make sure your
+hint is obviously the former, with concrete arithmetic, not the latter.
+
+On follow-up questions, rephrase the SAME operation in different words, or
+walk through one specific step using the visible numbers (without ever
+stating the missing number itself)."""
 
 
 STRATEGY_INSTRUCTION = """\
