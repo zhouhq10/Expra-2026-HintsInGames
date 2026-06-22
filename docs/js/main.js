@@ -185,7 +185,7 @@
       return { condition: urlInfo.value, conditionAssigned: 'url' };
     }
     try {
-      const resp = await fetch('/api/condition');
+      const resp = await fetch('/api/condition', { headers: apiHeaders() });
       if (resp.ok) {
         const data = await resp.json();
         if (data && VALID_CONDITIONS.includes(data.condition)) {

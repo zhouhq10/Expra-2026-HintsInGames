@@ -383,13 +383,16 @@ def _write_counter(n: int) -> None:
 
 
 @app.get("/api/condition")
-def get_condition() -> dict:
+def get_condition(x_access_token: str | None = Header(default=None)) -> dict:
     """Weist Teilnehmer im Round-Robin einer Bedingung zu.
 
     Reihenfolge direct → strategy → reflective → control → direct → …
     Damit ist die Verteilung über N Teilnehmer maximal um 1 ungleich
     (z. B. bei 9 Teilnehmern: 3·direct + 2·strategy + 2·reflective + 2·control).
+    Token-gated wie die anderen API-Endpoints, damit Fremde den Counter
+    nicht aus dem Takt bringen können.
     """
+    require_token(x_access_token)
     n = _read_counter()
     condition = ASSIGNMENT_CONDITIONS[n % len(ASSIGNMENT_CONDITIONS)]
     _write_counter(n + 1)
