@@ -62,6 +62,12 @@ load_dotenv(ROOT / ".env")
 # über die LAN-IP auf einem anderen Gerät spielt. Verzeichnis ist gitignored.
 RESULTS_DIR = ROOT / "data" / "results"
 
+# Round-Robin-Zuweisung der Hint-Bedingung über alle Teilnehmer hinweg.
+# Counter wird persistent in einer Datei gehalten, damit die Verteilung
+# auch nach Server-Neustart sauber weiterläuft (Datei gitignored).
+ASSIGNMENT_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective", "control")
+COUNTER_FILE = ROOT / "data" / "condition-counter.txt"
+
 API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
 
@@ -280,6 +286,38 @@ def post_results(req: ResultsRequest) -> ResultsResponse:
 
     log.info("results saved participant=%s condition=%s file=%s", safe_id, safe_cond, filename)
     return ResultsResponse(saved_as=filename)
+
+
+def _read_counter() -> int:
+    """Liest den Round-Robin-Counter; bei fehlender Datei oder Lesefehler → 0."""
+    try:
+        return int(COUNTER_FILE.read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
+def _write_counter(n: int) -> None:
+    """Persistiert den Counter; Fehler werden geloggt, nicht geworfen."""
+    try:
+        COUNTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+        COUNTER_FILE.write_text(str(n))
+    except OSError as err:
+        log.warning("Could not persist condition counter: %s", err)
+
+
+@app.get("/api/condition")
+def get_condition() -> dict:
+    """Weist Teilnehmer im Round-Robin einer Bedingung zu.
+
+    Reihenfolge direct → strategy → reflective → control → direct → …
+    Damit ist die Verteilung über N Teilnehmer maximal um 1 ungleich
+    (z. B. bei 9 Teilnehmern: 3·direct + 2·strategy + 2·reflective + 2·control).
+    """
+    n = _read_counter()
+    condition = ASSIGNMENT_CONDITIONS[n % len(ASSIGNMENT_CONDITIONS)]
+    _write_counter(n + 1)
+    log.info("assigned condition #%d -> %s", n, condition)
+    return {"condition": condition, "index": n}
 
 
 # ---------- Static-Files-Serving ------------------------------------------
