@@ -41,7 +41,33 @@ folder within seconds.
 
 ---
 
-## B. Deploy the app to Render
+## B. Set up the condition counter (Upstash)
+
+The four hint conditions are handed out round-robin (direct → strategy →
+reflective → control → …). The counter that remembers *who's next* must survive
+restarts — and Render's free disk does **not**: a cold start after idle wipes
+it, the counter resets to `0`, and **every participant gets `direct`**. So the
+counter lives in a free Upstash Redis and is incremented atomically.
+
+1. Go to <https://upstash.com> → sign up (free) → **Create Database**. Any
+   region near your Render region is fine; the **Free** plan is plenty.
+2. Open the database → **REST API** section. Copy two values:
+   - `UPSTASH_REDIS_REST_URL` (looks like `https://xxxx.upstash.io`)
+   - `UPSTASH_REDIS_REST_TOKEN` (a long token)
+3. You'll paste both into Render in the next section.
+
+No code goes into Upstash — the server calls `INCR` on the REST API each time it
+assigns a condition. Leaving these two vars empty falls back to the local file
+counter (fine for `python server.py` on your own machine).
+
+> **Already collected some `direct` participants?** The counter starts at `0`,
+> so the first new participant would get `direct` again. To skip ahead, open the
+> Upstash **Data Browser** (or CLI) and run `SET expra-condition-counter N`,
+> where `N` = how many assignments should count as already done.
+
+---
+
+## C. Deploy the app to Render
 
 1. Push your code to GitHub (this repo already contains `render.yaml`).
 2. Go to <https://render.com> → sign in with GitHub.
@@ -52,6 +78,8 @@ folder within seconds.
    - `ACCESS_TOKEN` — invent a token, e.g. `expra2026-x7k2`. (Participants get
      it in their URL; it blocks random callers from spending your credits.)
    - `RESULTS_WEBHOOK_URL` — the `/exec` URL from section A.
+   - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` — the two values
+     from section B.
 5. Click **Apply / Deploy**. After ~2 min you get a URL like
    `https://expra-hints-experiment.onrender.com`.
 
@@ -61,7 +89,7 @@ folder within seconds.
 
 ---
 
-## C. Protect your OpenAI budget
+## D. Protect your OpenAI budget
 
 The proxy is now public, so before sharing it:
 
@@ -72,7 +100,7 @@ The proxy is now public, so before sharing it:
 
 ---
 
-## D. The link you send participants
+## E. The link you send participants
 
 Append the access token as `?key=...`:
 
@@ -95,8 +123,10 @@ check is skipped, so `python server.py` keeps working as before.)
 ## Quick checklist
 
 - [ ] Drive folder created, Apps Script deployed, `/exec` URL copied
+- [ ] Upstash database created, REST URL + token copied
 - [ ] Render service deployed from `render.yaml`
-- [ ] `OPENAI_API_KEY`, `ACCESS_TOKEN`, `RESULTS_WEBHOOK_URL` set in Render
+- [ ] `OPENAI_API_KEY`, `ACCESS_TOKEN`, `RESULTS_WEBHOOK_URL`,
+      `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` set in Render
 - [ ] OpenAI hard spending cap set
 - [ ] Test run end-to-end: hint loads, CSV appears in Drive
 - [ ] Share the `?key=...` link

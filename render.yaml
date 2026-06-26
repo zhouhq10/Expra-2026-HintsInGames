@@ -20,5 +20,9 @@ services:
         sync: false
       - key: RESULTS_WEBHOOK_URL     # Google Apps Script URL for result CSVs
         sync: false
+      - key: UPSTASH_REDIS_REST_URL  # persistent round-robin condition counter (Upstash REST)
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
       - key: LLM_MODEL
         value: gpt-4o-mini

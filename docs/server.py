@@ -65,10 +65,16 @@ load_dotenv(ROOT / ".env")
 RESULTS_DIR = ROOT / "data" / "results"
 
 # Round-Robin-Zuweisung der Hint-Bedingung über alle Teilnehmer hinweg.
-# Counter wird persistent in einer Datei gehalten, damit die Verteilung
-# auch nach Server-Neustart sauber weiterläuft (Datei gitignored).
+# Reihenfolge: direct -> strategy -> reflective -> control -> direct -> ...
 ASSIGNMENT_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective", "control")
+
+# Der Zählerstand muss Server-Neustarts überleben. Auf Free-Tier-Hosting ist
+# die lokale Platte flüchtig (Cold Start nach Idle = leeres Dateisystem); der
+# Datei-Zähler springt dann auf 0 zurück und ALLE bekämen "direct". Deshalb in
+# Produktion ein persistenter, atomarer Zähler in Upstash (Redis-REST); die
+# Datei dient nur noch als lokaler Fallback für die Entwicklung (gitignored).
 COUNTER_FILE = ROOT / "data" / "condition-counter.txt"
+UPSTASH_COUNTER_KEY = "expra-condition-counter"
 
 API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini").strip()
@@ -83,6 +89,12 @@ ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "").strip()
 # der Server jede fertige Ergebnis-CSV zusätzlich dorthin. Nötig im Cloud-
 # Hosting, wo die lokale Platte ephemer ist (Restart/Sleep löscht sie).
 RESULTS_WEBHOOK_URL = os.environ.get("RESULTS_WEBHOOK_URL", "").strip()
+
+# Upstash-Redis-Zugang für den persistenten Bedingungs-Zähler (REST-API).
+# Beide Werte stehen im Upstash-Dashboard unter "REST API". Leer => lokaler
+# Datei-Zähler (siehe COUNTER_FILE). In Render als Env-Vars hinterlegen.
+UPSTASH_REDIS_REST_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip().rstrip("/")
+UPSTASH_REDIS_REST_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "").strip()
 
 
 def _key_looks_unset(value: str) -> bool:
@@ -382,6 +394,40 @@ def _write_counter(n: int) -> None:
         log.warning("Could not persist condition counter: %s", err)
 
 
+def _upstash_incr() -> int:
+    """Erhöht den Bedingungs-Zähler atomar in Upstash und gibt den neuen Wert.
+
+    Nutzt die Upstash-REST-API (POST /incr/<key>, Bearer-Token). INCR ist
+    atomar — selbst wenn zwei Teilnehmer exakt gleichzeitig starten, bekommt
+    keiner dieselbe Zahl. Erster Aufruf auf einem frischen Key liefert 1.
+    """
+    request = urllib.request.Request(
+        f"{UPSTASH_REDIS_REST_URL}/incr/{UPSTASH_COUNTER_KEY}",
+        headers={"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=10) as resp:
+        data = json.loads(resp.read())
+    return int(data["result"])
+
+
+def _next_index() -> int:
+    """Nächster 0-basierter Round-Robin-Index für die Bedingungszuweisung.
+
+    Produktion: atomarer Upstash-Zähler (überlebt Server-Neustarts). Ist
+    Upstash nicht konfiguriert oder gerade nicht erreichbar, greift der lokale
+    Datei-Zähler als Fallback — der reicht für die lokale Entwicklung.
+    """
+    if UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN:
+        try:
+            return _upstash_incr() - 1  # INCR liefert 1 beim ersten Teilnehmer
+        except (OSError, ValueError, KeyError) as err:
+            log.error("Upstash-Zähler nicht erreichbar, nutze lokalen Datei-Fallback: %s", err)
+    n = _read_counter()
+    _write_counter(n + 1)
+    return n
+
+
 @app.get("/api/condition")
 def get_condition(x_access_token: str | None = Header(default=None)) -> dict:
     """Weist Teilnehmer im Round-Robin einer Bedingung zu.
@@ -389,13 +435,14 @@ def get_condition(x_access_token: str | None = Header(default=None)) -> dict:
     Reihenfolge direct → strategy → reflective → control → direct → …
     Damit ist die Verteilung über N Teilnehmer maximal um 1 ungleich
     (z. B. bei 9 Teilnehmern: 3·direct + 2·strategy + 2·reflective + 2·control).
+    Der Zählerstand liegt in Produktion persistent in Upstash (siehe
+    _next_index), damit Server-Neustarts ihn nicht auf 0 zurücksetzen.
     Token-gated wie die anderen API-Endpoints, damit Fremde den Counter
     nicht aus dem Takt bringen können.
     """
     require_token(x_access_token)
-    n = _read_counter()
+    n = _next_index()
     condition = ASSIGNMENT_CONDITIONS[n % len(ASSIGNMENT_CONDITIONS)]
-    _write_counter(n + 1)
     log.info("assigned condition #%d -> %s", n, condition)
     return {"condition": condition, "index": n}
 
