@@ -120,6 +120,27 @@ check is skipped, so `python server.py` keeps working as before.)
 
 ---
 
+## F. Temporarily forcing one condition (to catch up a group)
+
+If one group falls behind (e.g. too few `reflective` participants), you can
+force **every** new participant into a chosen group for a while, without
+touching the code. On the Render service:
+
+1. **Environment** → add/edit `FORCE_CONDITION` → set it to the group, e.g.
+   `reflective` (valid: `direct`, `strategy`, `reflective`, `control`).
+2. **Save** — Render redeploys automatically. From now on everyone gets that
+   group. The round-robin counter is *paused* (not advanced), so it resumes
+   cleanly later.
+3. When that group has enough data, either set `FORCE_CONDITION` to the next
+   under-filled group (e.g. `control`) or **clear it** (empty value) to return
+   to normal balanced round-robin.
+
+Verify from the logs: a forced assignment logs `condition FORCED via
+FORCE_CONDITION -> reflective`. An invalid value is ignored (logged as a
+warning) and normal round-robin continues.
+
+---
+
 ## Quick checklist
 
 - [ ] Drive folder created, Apps Script deployed, `/exec` URL copied
