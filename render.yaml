@@ -24,5 +24,7 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      - key: FORCE_CONDITION        # empty = normal round-robin; set to a group (e.g. reflective) to force it for everyone
+        value: ""
       - key: LLM_MODEL
         value: gpt-4o-mini

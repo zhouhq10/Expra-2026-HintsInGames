@@ -68,6 +68,14 @@ RESULTS_DIR = ROOT / "data" / "results"
 # Reihenfolge: direct -> strategy -> reflective -> control -> direct -> ...
 ASSIGNMENT_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective", "control")
 
+# Optionaler manueller Override der Zuweisung. Ist FORCE_CONDITION auf eine
+# gültige Gruppe gesetzt, bekommt JEDER neue Teilnehmer genau diese Bedingung;
+# das Round-Robin und der persistente Zähler bleiben dabei unangetastet, laufen
+# nach dem Entfernen des Overrides also sauber weiter. Gedacht, um eine
+# unterrepräsentierte Gruppe gezielt aufzuholen (z. B. FORCE_CONDITION=reflective).
+# Leer => normales Round-Robin.
+FORCE_CONDITION = os.environ.get("FORCE_CONDITION", "").strip().lower()
+
 # Der Zählerstand muss Server-Neustarts überleben. Auf Free-Tier-Hosting ist
 # die lokale Platte flüchtig (Cold Start nach Idle = leeres Dateisystem); der
 # Datei-Zähler springt dann auf 0 zurück und ALLE bekämen "direct". Deshalb in
@@ -132,7 +140,7 @@ def get_client() -> OpenAI:
 
 # ---------- Request / Response-Schemas ------------------------------------
 
-ALLOWED_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective")
+ALLOWED_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective", "control")
 
 
 class TrialPayload(BaseModel):
@@ -441,6 +449,18 @@ def get_condition(x_access_token: str | None = Header(default=None)) -> dict:
     nicht aus dem Takt bringen können.
     """
     require_token(x_access_token)
+
+    # Manueller Override (z. B. um Reflective aufzuholen): feste Gruppe für alle,
+    # Round-Robin + Zähler bleiben unangetastet. Ungültiger Wert => ignorieren.
+    if FORCE_CONDITION:
+        if FORCE_CONDITION in ASSIGNMENT_CONDITIONS:
+            log.info("condition FORCED via FORCE_CONDITION -> %s", FORCE_CONDITION)
+            return {"condition": FORCE_CONDITION, "index": -1, "forced": True}
+        log.warning(
+            "FORCE_CONDITION='%s' ist keine gültige Gruppe %s — ignoriere, nutze Round-Robin",
+            FORCE_CONDITION, ASSIGNMENT_CONDITIONS,
+        )
+
     n = _next_index()
     condition = ASSIGNMENT_CONDITIONS[n % len(ASSIGNMENT_CONDITIONS)]
     log.info("assigned condition #%d -> %s", n, condition)
