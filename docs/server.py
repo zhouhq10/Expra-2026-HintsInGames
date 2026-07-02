@@ -65,8 +65,10 @@ load_dotenv(ROOT / ".env")
 RESULTS_DIR = ROOT / "data" / "results"
 
 # Round-Robin-Zuweisung der Hint-Bedingung über alle Teilnehmer hinweg.
-# Reihenfolge: direct -> strategy -> reflective -> control -> direct -> ...
-ASSIGNMENT_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective", "control")
+# Reihenfolge: direct -> strategy -> reflective -> direct -> ...
+# Control wurde aus dem Studien-Design genommen und ist deshalb nicht mehr in
+# der Rotation. Wieder aufnehmen = einfach "control" zurück ins Tuple.
+ASSIGNMENT_CONDITIONS: tuple[str, ...] = ("direct", "strategy", "reflective")
 
 # Optionaler manueller Override der Zuweisung. Ist FORCE_CONDITION auf eine
 # gültige Gruppe gesetzt, bekommt JEDER neue Teilnehmer genau diese Bedingung;
@@ -440,9 +442,9 @@ def _next_index() -> int:
 def get_condition(x_access_token: str | None = Header(default=None)) -> dict:
     """Weist Teilnehmer im Round-Robin einer Bedingung zu.
 
-    Reihenfolge direct → strategy → reflective → control → direct → …
+    Reihenfolge direct → strategy → reflective → direct → …
     Damit ist die Verteilung über N Teilnehmer maximal um 1 ungleich
-    (z. B. bei 9 Teilnehmern: 3·direct + 2·strategy + 2·reflective + 2·control).
+    (z. B. bei 9 Teilnehmern: 3·direct + 3·strategy + 3·reflective).
     Der Zählerstand liegt in Produktion persistent in Upstash (siehe
     _next_index), damit Server-Neustarts ihn nicht auf 0 zurücksetzen.
     Token-gated wie die anderen API-Endpoints, damit Fremde den Counter
